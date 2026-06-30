@@ -1,0 +1,7 @@
+{
+  "name": "cars24-claims-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal warranty claims triage console for Cars24 (demo). Static page + Groq adjudication proxy."
+}

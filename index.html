@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Warranty Claims Triage Console · Cars24</title>
+<meta name="description" content="An internal ops console that auto-decides clear warranty claims with the clause cited and escalates the ambiguous ones with a handover note. Synthetic data, Cars24 Lifetime Warranty Plan rubric." />
+<meta property="og:title" content="Warranty Claims Triage Console · Cars24" />
+<meta property="og:description" content="Auto-decides the clear cases. Escalates the ambiguous ones with a handover note." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* Cars24 palette — pulled from live cars24.com source */
+    --brand:#3c018c;            /* signature deep purple — structure */
+    --brand-ink:#2c0166;
+    --indigo:#4e34ff;           /* vivid interactive */
+    --indigo-soft:#f0e6ff;      /* purple tint */
+    --indigo-soft2:#f7eeff;
+    --canvas:#fdfcff;
+    --surface:#ffffff;
+    --border:#e6e3ef;
+    --border-strong:#d7d2e6;
+    --ink:#0a172f;              /* headings navy */
+    --muted:#62748e;            /* slate body */
+    --muted-2:#8a93a6;
+    /* status semantics — held off-brand on purpose */
+    --ok:#1d7a4d; --ok-bg:#dcfce7; --ok-bd:#a7e3c1;
+    --no:#b3243c; --no-bg:#fdecef; --no-bd:#f3c2cc;
+    --esc:#9a5b00; --esc-bg:#fef3c7; --esc-bd:#f4dd99;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(10,23,47,.04), 0 8px 28px rgba(60,1,140,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--canvas);color:var(--ink);
+    font-family:"DM Sans",system-ui,sans-serif;font-weight:400;
+    line-height:1.6;-webkit-font-smoothing:antialiased;
+    padding-bottom:80px;
+  }
+  .mono{font-family:"JetBrains Mono",monospace}
+  a{color:var(--indigo);text-decoration:none}
+
+  /* ---------- layout ---------- */
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+  header.top{
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#ffffff, #fcfbff);
+  }
+  .top-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:22px 0 20px}
+  .brandmark{display:flex;align-items:center;gap:11px}
+  .c24logo{height:25px;width:auto;display:block;flex:none}
+  .bdivider{width:1px;height:30px;background:var(--border-strong);flex:none}
+  .scope-note{margin-top:14px;font-size:13px;color:var(--muted);background:var(--indigo-soft2);border:1px solid var(--border);border-left:3px solid var(--indigo);border-radius:0 9px 9px 0;padding:10px 14px;max-width:760px}
+  .scope-note strong{color:var(--brand);font-weight:600}
+  .brandmark h1{font-size:17px;font-weight:700;letter-spacing:-.2px;line-height:1.2}
+  .brandmark .sub{font-size:13px;color:var(--muted);font-weight:400;margin-top:2px;max-width:520px}
+  .disclosure{
+    font-family:"JetBrains Mono";font-size:11px;line-height:1.5;color:var(--muted-2);
+    text-align:right;max-width:320px;border-left:2px solid var(--border-strong);padding-left:12px;
+  }
+  .disclosure b{color:var(--muted);font-weight:500}
+
+  /* ---------- nav pill ---------- */
+  nav.pill{
+    position:sticky;top:14px;z-index:40;margin:18px auto 0;width:max-content;max-width:calc(100% - 32px);
+    display:flex;gap:4px;padding:5px;background:rgba(255,255,255,.85);backdrop-filter:blur(10px);
+    border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow);
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  }
+  nav.pill::-webkit-scrollbar{display:none}
+  nav.pill button{
+    font-family:"DM Sans";font-size:13.5px;font-weight:500;color:var(--muted);
+    border:none;background:none;cursor:pointer;padding:8px 18px;border-radius:999px;
+    display:flex;align-items:center;gap:8px;transition:color .15s, background .15s;white-space:nowrap;
+  }
+  nav.pill button .ix{font-family:"JetBrains Mono";font-size:11px;opacity:.6}
+  nav.pill button:hover{color:var(--ink)}
+  nav.pill button.active{background:var(--brand);color:#fff}
+  nav.pill button.active .ix{opacity:.8}
+
+  /* ---------- views ---------- */
+  .view{display:none;padding:34px 0 10px;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .eyebrow{font-family:"JetBrains Mono";font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand);font-weight:500}
+  h2.vh{font-size:27px;font-weight:700;letter-spacing:-.5px;margin:8px 0 6px}
+  .lede{color:var(--muted);font-size:15.5px;max-width:760px}
+
+  /* ---------- README (how it works) ---------- */
+  .readme-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:26px}
+  @media(max-width:840px){.readme-grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+  .card h3{font-size:14px;font-weight:700;letter-spacing:-.1px;display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--indigo);flex:none}
+  .rubric-list{list-style:none;font-size:13.5px;color:var(--muted)}
+  .rubric-list li{padding:6px 0;border-bottom:1px dashed var(--border);display:flex;gap:10px}
+  .rubric-list li:last-child{border-bottom:none}
+  .rubric-list .tag{font-family:"JetBrains Mono";font-size:11px;color:var(--brand);font-weight:500;flex:none;width:96px}
+  .rubric-list b{color:var(--ink);font-weight:500}
+
+  .flow{grid-column:1/-1}
+  .flow-steps{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+  .flow-step{
+    flex:1;min-width:150px;border:1px solid var(--border);border-radius:11px;padding:13px 15px;background:var(--canvas);position:relative;
+  }
+  .flow-step .n{font-family:"JetBrains Mono";font-size:11px;color:#fff;background:var(--brand);width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .flow-step h4{font-size:13px;font-weight:600;margin-bottom:3px}
+  .flow-step p{font-size:12px;color:var(--muted);line-height:1.45}
+  .flow-step.deny .n{background:var(--no)}
+  .flow-step.app .n{background:var(--ok)}
+  .flow-step.esc .n{background:var(--esc)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+  .why{grid-column:1/-1;background:linear-gradient(120deg,var(--indigo-soft),var(--indigo-soft2));border:1px solid var(--border)}
+  .why p{font-size:14.5px;color:var(--brand-ink);line-height:1.6}
+  .why p b{color:var(--brand)}
+
+  /* ---------- badges ---------- */
+  .badge{font-family:"JetBrains Mono";font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1px solid transparent}
+  .badge .bd{width:6px;height:6px;border-radius:50%}
+  .b-app{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)} .b-app .bd{background:var(--ok)}
+  .b-no{color:var(--no);background:var(--no-bg);border-color:var(--no-bd)} .b-no .bd{background:var(--no)}
+  .b-esc{color:var(--esc);background:var(--esc-bg);border-color:var(--esc-bd)} .b-esc .bd{background:var(--esc)}
+  .badge.manual{background:transparent}
+  .b-app.manual{border-color:var(--ok);border-style:solid}
+  .b-no.manual{border-color:var(--no);border-style:solid}
+  .human-tag{font-family:"JetBrains Mono";font-size:10px;color:var(--muted-2);display:inline-flex;align-items:center;gap:4px;margin-left:6px}
+
+  .conf{font-family:"JetBrains Mono";font-size:11px;color:var(--muted-2)}
+  .conf.low{color:var(--esc)}
+
+  /* ---------- insights ---------- */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:24px}
+  @media(max-width:840px){.metrics{grid-template-columns:1fr 1fr}}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);position:relative}
+  .metric .label{font-size:12px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
+  .metric .big{font-family:"DM Sans";font-weight:700;font-size:34px;letter-spacing:-1px;line-height:1.05;margin-top:8px}
+  .metric .big small{font-size:15px;color:var(--muted-2);font-weight:500;letter-spacing:0}
+  .metric .note{font-size:11.5px;color:var(--muted-2);margin-top:6px;line-height:1.4}
+  .info{cursor:help;width:15px;height:15px;border-radius:50%;border:1px solid var(--border-strong);color:var(--muted-2);font-size:10px;font-family:"JetBrains Mono";display:inline-flex;align-items:center;justify-content:center;position:relative}
+  .info:hover .tip{opacity:1;transform:translateY(0);pointer-events:auto}
+  .tip{position:absolute;bottom:130%;left:50%;transform:translate(-50%,4px);width:230px;background:var(--ink);color:#fff;font-family:"DM Sans";font-weight:400;font-size:11.5px;line-height:1.5;padding:9px 11px;border-radius:9px;opacity:0;transition:.16s;pointer-events:none;z-index:30;text-align:left}
+  .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink)}
+
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  @media(max-width:840px){.charts{grid-template-columns:1fr}}
+  .chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+  .chart h3{font-size:13.5px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .chart .csub{font-size:12px;color:var(--muted-2);margin-bottom:16px}
+  .bar-row{display:flex;align-items:center;gap:12px;margin:9px 0;font-size:13px}
+  .bar-row .blab{width:124px;flex:none;color:var(--muted);font-size:12.5px}
+  .bar-track{flex:1;height:22px;background:var(--canvas);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+  .bar-fill{height:100%;border-radius:6px 0 0 6px;transition:width .5s cubic-bezier(.2,.7,.2,1);min-width:2px}
+  .bar-row .bval{width:62px;flex:none;text-align:right;font-family:"JetBrains Mono";font-size:12px;color:var(--ink)}
+
+  .split{display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin:4px 0 14px}
+  .split span{display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono";font-size:11px;color:#fff;transition:width .5s cubic-bezier(.2,.7,.2,1)}
+  .split-key{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+  .split-key span{display:flex;align-items:center;gap:6px}
+  .split-key i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* ---------- claims queue ---------- */
+  .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:22px;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .fgroup{display:flex;flex-direction:column;gap:5px}
+  .fgroup label{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2)}
+  select{font-family:"DM Sans";font-size:13px;color:var(--ink);padding:7px 11px;border:1px solid var(--border-strong);border-radius:9px;background:var(--canvas);min-width:150px;cursor:pointer}
+  select:focus{outline:2px solid var(--indigo-soft);border-color:var(--indigo)}
+  select:disabled{opacity:.45;cursor:not-allowed}
+  .fclear{margin-left:auto;font-family:"JetBrains Mono";font-size:12px;color:var(--indigo);background:none;border:none;cursor:pointer;padding:8px 4px}
+  .fcount{font-family:"JetBrains Mono";font-size:12px;color:var(--muted-2);align-self:center;padding-bottom:8px}
+
+  .tbl-wrap{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);text-align:left;padding:12px 16px;background:var(--indigo-soft2);border-bottom:1px solid var(--border);font-weight:500}
+  tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:hover{background:var(--indigo-soft2)}
+  td{padding:13px 16px;vertical-align:middle}
+  td.cid{font-family:"JetBrains Mono";font-size:12.5px;color:var(--brand);font-weight:500}
+  td.comp .cat{font-weight:500;color:var(--ink)}
+  td.comp .scat{font-size:12px;color:var(--muted-2)}
+  td.sym{color:var(--muted);max-width:300px}
+  td.sym .clip{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+  .empty{padding:40px;text-align:center;color:var(--muted-2);font-size:14px}
+
+  /* ---------- modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(10,23,47,.42);backdrop-filter:blur(3px);z-index:60;display:none;align-items:center;justify-content:center;padding:24px}
+  .overlay.open{display:flex;animation:fade .2s}
+  .modal{background:var(--surface);border-radius:18px;max-width:660px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 30px 80px rgba(10,23,47,.3);animation:pop .22s ease}
+  @keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+  .modal-head{padding:22px 26px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
+  .modal-head .mtop{display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .modal-head .cid{font-family:"JetBrains Mono";font-size:13px;color:var(--brand);font-weight:500}
+  .modal-close{background:none;border:none;font-size:22px;color:var(--muted-2);cursor:pointer;line-height:1;padding:2px 6px}
+  .modal-head h3{font-size:19px;font-weight:700;margin-top:10px;letter-spacing:-.3px}
+  .modal-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .chip{font-family:"JetBrains Mono";font-size:11px;color:var(--muted);background:var(--canvas);border:1px solid var(--border);border-radius:7px;padding:3px 8px}
+  .modal-body{padding:20px 26px 26px}
+  .mlabel{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin:18px 0 8px}
+  .mlabel:first-child{margin-top:0}
+  .symtext{font-size:15px;color:var(--ink);font-style:italic;background:var(--canvas);border-left:3px solid var(--border-strong);padding:11px 15px;border-radius:0 9px 9px 0}
+  .reason{font-size:14px;color:var(--ink);line-height:1.6}
+  .clause-cite{margin-top:8px;font-family:"JetBrains Mono";font-size:12px;color:var(--brand);background:var(--indigo-soft);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:inline-block}
+
+  /* decision trace */
+  .trace{margin-top:6px}
+  .trace-step{display:flex;gap:12px;padding:3px 0}
+  .trace-rail{display:flex;flex-direction:column;align-items:center;flex:none}
+  .trace-node{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex:none}
+  .trace-line{width:2px;flex:1;background:var(--border);min-height:10px;margin:2px 0}
+  .trace-step:last-child .trace-line{display:none}
+  .trace-body{padding-bottom:12px}
+  .trace-body .ts-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .trace-body .ts-res{font-family:"JetBrains Mono";font-size:10px;padding:1px 6px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em}
+  .trace-body .ts-note{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:3px}
+  .n-pass{background:var(--ok)} .r-pass{background:var(--ok-bg);color:var(--ok)}
+  .n-fail{background:var(--no)} .r-fail{background:var(--no-bg);color:var(--no)}
+  .n-flag{background:var(--esc)} .r-flag{background:var(--esc-bg);color:var(--esc)}
+  .n-skip{background:var(--border-strong)} .r-skip{background:var(--canvas);color:var(--muted-2)}
+  .n-app{background:var(--ok)} .n-deny{background:var(--no)} .n-esc{background:var(--esc)}
+
+  .handover-box{background:var(--esc-bg);border:1px solid var(--esc-bd);border-radius:11px;padding:14px 16px;font-size:13.5px;color:#5c3a00;line-height:1.55}
+  .handover-box .ho-h{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--esc);margin-bottom:6px;display:flex;align-items:center;gap:7px}
+
+  .actions{display:flex;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}
+  .actions .ahint{font-size:12px;color:var(--muted-2);align-self:center;margin-right:auto;max-width:230px;line-height:1.4}
+  .btn{font-family:"DM Sans";font-weight:600;font-size:13.5px;padding:10px 20px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:.15s}
+  .btn-app{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-bd)}
+  .btn-app:hover{background:var(--ok);color:#fff}
+  .btn-no{background:var(--no-bg);color:var(--no);border-color:var(--no-bd)}
+  .btn-no:hover{background:var(--no);color:#fff}
+  .resolved-note{margin-top:20px;padding-top:18px;border-top:1px solid var(--border);font-size:13px;color:var(--muted);display:flex;align-items:center;gap:9px}
+
+  footer{max-width:1160px;margin:36px auto 0;padding:20px 24px;border-top:1px solid var(--border);font-family:"JetBrains Mono";font-size:11.5px;color:var(--muted-2);line-height:1.6}
+
+  /* ---------- live agent (view 4) ---------- */
+  .agent-note{font-family:"JetBrains Mono";font-size:11px;color:var(--brand);background:var(--indigo-soft);padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .agent-grid{display:grid;grid-template-columns:minmax(0,430px) 1fr;gap:18px;margin-top:24px;align-items:start}
+  @media(max-width:900px){.agent-grid{grid-template-columns:1fr}}
+  .agent-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+  .agent-form label{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-2);display:block;margin-bottom:5px}
+  .agent-form textarea,.agent-form input[type=number],.agent-form select{font-family:"DM Sans";font-size:13.5px;color:var(--ink);padding:9px 11px;border:1px solid var(--border-strong);border-radius:9px;background:var(--canvas);width:100%}
+  .agent-form textarea{resize:vertical;line-height:1.5}
+  .agent-form textarea:focus,.agent-form input:focus,.agent-form select:focus{outline:2px solid var(--indigo-soft);border-color:var(--indigo)}
+  .frow{display:flex;gap:10px}
+  .frow .fgroup{flex:1;min-width:0}
+  .btn-run{font-family:"DM Sans";font-weight:600;font-size:14px;color:#fff;background:var(--brand);border:none;border-radius:10px;padding:12px;cursor:pointer;transition:background .15s;margin-top:2px}
+  .btn-run:hover{background:var(--indigo)}
+  .btn-run:disabled{opacity:.6;cursor:wait}
+  .agent-disc{font-size:11.5px;color:var(--muted-2);line-height:1.45}
+  .agent-result{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow);min-height:320px}
+  .ar-empty{color:var(--muted-2);font-size:14px;min-height:276px;display:flex;align-items:center;justify-content:center;text-align:center;border:1px dashed var(--border);border-radius:11px;padding:20px}
+  .ar-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:276px;color:var(--muted);font-size:13.5px}
+  .spinner{width:30px;height:30px;border:3px solid var(--indigo-soft);border-top-color:var(--indigo);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ar-prov{font-family:"JetBrains Mono";font-size:11px;color:var(--muted-2);margin-top:18px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px}
+  .ar-prov .dotlive{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg);flex:none}
+  .ar-prov .dotcode{width:8px;height:8px;border-radius:50%;background:var(--indigo);box-shadow:0 0 0 3px var(--indigo-soft);flex:none}
+  .ar-err{color:var(--no);font-size:13.5px;background:var(--no-bg);border:1px solid var(--no-bd);border-radius:10px;padding:14px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brandmark">
+      <svg class="c24logo" viewBox="0 0 332 68" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cars24"><path d="M60.6335 0H7.36658C3.28312 0 0 3.29221 0 7.36658V60.6334C0 64.6987 3.29221 68 7.36658 68H60.6335C64.6987 68 68.0001 64.6896 68.0001 60.6334V7.36658C68.0001 3.28312 64.6897 0 60.6335 0ZM57.896 40.5891C55.0585 50.8114 45.8002 58.3689 34.714 58.6145C34.5412 58.6326 34.3593 58.6327 34.1683 58.6327C33.9773 58.6327 33.7863 58.6326 33.6044 58.6145C33.4135 58.6145 33.2043 58.6144 33.0042 58.5962H32.9496C24.9373 58.1961 17.9436 53.9854 13.7328 47.7465C11.0863 43.8176 9.5584 39.0885 9.5584 33.9864C9.5584 31.5854 9.89492 29.2662 10.5406 27.0744C10.6134 26.8289 10.8225 26.6743 11.0863 26.6743H19.7989C20.2172 26.6743 20.4809 27.0745 20.3263 27.4473C19.5533 29.4482 19.1168 31.6582 19.1168 33.9864C19.1168 41.4349 23.5367 47.7282 29.6574 49.8564C30.2394 50.0474 30.8488 50.2111 31.4672 50.3475C32.3403 50.5203 33.2407 50.6112 34.1683 50.6112C35.7326 50.6112 37.2695 50.3475 38.6883 49.8564C41.0711 49.0288 43.2083 47.5554 44.9272 45.6274C46.2914 44.0995 47.3827 42.2624 48.1375 40.2253C48.2103 39.9979 48.4195 39.8706 48.665 39.8706H57.3595C57.7414 39.8706 58.0051 40.2253 57.9051 40.5891H57.896ZM57.896 30.5668H49.3562C49.0925 30.5668 48.8651 30.3758 48.8105 30.1121C48.1648 27.1291 46.7916 24.4643 44.8999 22.3453C43.7085 20.9993 42.3079 19.8898 40.7619 19.0531C40.098 18.6711 39.3976 18.371 38.6792 18.1254C37.2422 17.6343 35.7326 17.3706 34.1592 17.3706H17.3251C16.8158 17.3706 16.5703 16.743 16.925 16.3883C21.0812 12.3049 26.6926 9.69477 32.9315 9.39465H32.986C33.1952 9.37646 33.4043 9.37644 33.5862 9.37644C33.7772 9.35825 33.9682 9.35824 34.1501 9.35824C34.332 9.35824 34.5321 9.35825 34.6958 9.37644C46.6552 9.64019 56.5227 18.4074 58.4326 29.8756C58.4871 30.2303 58.2234 30.5577 57.8869 30.5577L57.896 30.5668Z" fill="#4736FE"/><path d="M194.751 25.4562H203.064C203.355 25.4562 203.591 25.6926 203.591 25.9836V32.5317C204.846 27.3114 208.466 24.4011 214.586 24.5739C214.868 24.5739 215.105 24.8105 215.105 25.1015V33.1502C215.105 33.4412 214.868 33.6776 214.577 33.6776H213.741C208.166 33.6776 203.882 37.3973 203.882 43.6089V62.0981C203.882 62.3892 203.646 62.6257 203.355 62.6257H194.751C194.46 62.6257 194.224 62.3892 194.224 62.0981V25.9836C194.224 25.6926 194.46 25.4562 194.751 25.4562Z" fill="#4736FE"/><path d="M178.181 25.7652V30.1033C175.098 26.511 170.805 24.2737 166.048 24.2737C156.672 24.2737 149.06 32.9681 149.06 43.6997C149.06 54.4313 156.663 63.1257 166.048 63.1257C170.805 63.1257 175.098 60.8885 178.181 57.2961V61.8706C178.181 62.1616 178.417 62.3982 178.708 62.3982H187.366C187.657 62.3982 187.894 62.1616 187.894 61.8706V25.7561C187.894 25.4651 187.657 25.2287 187.366 25.2287H178.708C178.417 25.2287 178.181 25.4651 178.181 25.7561V25.7652ZM168.04 54.4767C162.42 54.4767 157.863 49.6475 157.863 43.6997C157.863 37.7518 162.42 32.9226 168.04 32.9226C173.351 32.9226 177.717 37.2335 178.181 42.7357C178.208 43.054 178.226 43.3723 178.226 43.6997C178.226 44.0271 178.208 44.3454 178.181 44.6637C177.717 50.166 173.36 54.4767 168.04 54.4767Z" fill="#4736FE"/><path d="M247.472 63.0345H286.306C286.597 63.0345 286.834 62.7981 286.834 62.5071V53.8309C286.834 53.5398 286.597 53.3034 286.306 53.3034H267.371L281.122 37.0241L281.459 36.6239C284.114 33.4044 285.761 29.3119 285.879 24.8374C285.879 24.6555 285.888 24.4645 285.888 24.2735C285.888 13.5601 277.202 4.86572 266.48 4.86572C256.922 4.86572 248.973 11.7776 247.372 20.8812C247.327 21.145 247.491 21.3997 247.745 21.4724L256.23 23.9097C256.549 24.0006 256.867 23.7733 256.894 23.4459C257.322 18.2802 261.842 14.2786 267.198 14.6697C271.928 15.0153 275.747 18.8531 276.075 23.5914C276.248 26.1743 275.402 28.557 273.901 30.3759L273.747 30.5488L262.942 43.3448L254.548 53.2852L247.272 61.8977C247.236 61.9432 247.209 62.0069 247.209 62.0706V62.7618C247.209 62.9073 247.327 63.0254 247.472 63.0254V63.0345Z" fill="#4736FE"/><path d="M325.667 39.9341V5.42027C325.667 5.12924 325.431 4.89282 325.14 4.89282H316.209C316.036 4.89282 315.872 4.97467 315.782 5.12019L291.572 39.9341L286.924 46.6187C286.861 46.7097 286.833 46.8097 286.833 46.9188V48.0101C286.833 48.3011 287.07 48.5377 287.361 48.5377H315.936V62.5069C315.936 62.7979 316.173 63.0343 316.464 63.0343H325.14C325.431 63.0343 325.667 62.7979 325.667 62.5069V48.5377H331.133C331.424 48.5377 331.661 48.3011 331.661 48.0101V40.4617C331.661 40.1706 331.424 39.9341 331.133 39.9341H325.667ZM315.936 39.9341H303.513L315.936 22.0634V39.9341Z" fill="#4736FE"/><path d="M144.203 40.9266C144.549 40.9266 144.804 41.2449 144.713 41.5814C141.402 54.0136 130.061 63.1628 116.592 63.1628C103.123 63.1628 91.2093 53.5407 88.2354 40.6355C87.7443 38.5256 87.4897 36.3247 87.4897 34.0601C87.4897 31.55 87.808 29.1127 88.4082 26.7845C91.6368 14.234 103.032 4.95752 116.601 4.95752C130.171 4.95752 141.284 14.0157 144.667 26.348C144.758 26.6754 144.503 27.0027 144.158 27.0027H133.59C133.372 27.0027 133.181 26.8663 133.099 26.6663C130.398 19.7362 124.023 14.8706 116.592 14.8706C106.716 14.8706 98.7124 23.465 98.7124 34.0692C98.7124 44.6735 106.716 53.2679 116.592 53.2679C124.095 53.2679 130.516 48.3114 133.163 41.2813C133.244 41.0812 133.435 40.9357 133.654 40.9357H144.203V40.9266Z" fill="#4736FE"/><path d="M232.539 63.0979C229.483 63.0979 226.964 62.6885 224.991 61.8609C223.017 61.0424 221.453 60.0057 220.298 58.7597C219.143 57.5138 218.288 56.2768 217.724 55.0582C217.233 53.9941 216.833 52.7754 216.524 51.4021C216.451 51.0747 216.696 50.7565 217.033 50.7565H224.89C225.118 50.7565 225.309 50.902 225.391 51.1203C225.7 51.9933 226.073 52.739 226.509 53.3393C227 54.0214 227.764 54.6217 228.801 55.1401C229.838 55.6585 231.202 55.9131 232.894 55.9131C234.913 55.9131 236.377 55.4765 237.268 54.6126C238.159 53.7395 238.605 52.7664 238.605 51.6841C238.605 50.6019 238.214 49.8106 237.441 49.1831C236.668 48.5465 235.522 48.0645 234.021 47.7371L228.874 46.6821C226.809 46.2547 224.881 45.6362 223.09 44.8086C221.298 43.9901 219.843 42.8624 218.715 41.4254C217.588 39.9885 217.024 38.1423 217.024 35.8869C217.024 32.5492 218.297 29.7844 220.834 27.6017C223.372 25.4099 226.828 24.3186 231.202 24.3186C233.976 24.3186 236.268 24.6915 238.078 25.4463C239.887 26.2012 241.343 27.1379 242.452 28.2656C243.553 29.3933 244.38 30.521 244.917 31.6488C245.381 32.6128 245.763 33.7406 246.072 35.0229C246.154 35.3503 245.899 35.6686 245.562 35.6686H237.987C237.768 35.6686 237.568 35.5322 237.496 35.3321C237.232 34.5955 236.904 33.977 236.513 33.4859C236.068 32.922 235.404 32.4127 234.54 31.9671C233.667 31.5214 232.503 31.2941 231.048 31.2941C229.074 31.2941 227.673 31.7215 226.846 32.5673C226.027 33.4131 225.609 34.3045 225.609 35.2503C225.609 36.2871 226.055 37.0873 226.946 37.6512C227.837 38.215 228.992 38.6425 230.402 38.9244L235.267 39.9794C238.751 40.6888 241.606 41.9075 243.835 43.6446C246.072 45.3816 247.181 47.9008 247.181 51.193C247.181 53.403 246.608 55.4129 245.453 57.2227C244.298 59.0325 242.634 60.4694 240.442 61.5244C238.25 62.5794 235.613 63.107 232.512 63.107L232.539 63.0979Z" fill="#4736FE"/></svg>
+      <span class="bdivider"></span>
+      <div>
+        <h1>Warranty Claims Triage Console</h1>
+        <div class="sub">Auto-decides the clear cases with the clause cited. Escalates the ambiguous ones with a handover note for a human reviewer.</div>
+      </div>
+    </div>
+    <div class="disclosure">
+      <b>Synthetic claims data.</b> Rubric reflects Cars24's published Lifetime&nbsp;Warranty&nbsp;Plan terms: coverage, exclusions, void conditions. Not wired to any live claims system.
+    </div>
+  </div>
+</header>
+
+<nav class="pill">
+  <button data-view="readme" class="active"><span class="ix">01</span> How it works</button>
+  <button data-view="insights"><span class="ix">02</span> Insights</button>
+  <button data-view="queue"><span class="ix">03</span> Claims queue</button>
+  <button data-view="agent"><span class="ix">04</span> Live agent</button>
+</nav>
+
+<!-- ============ VIEW 1 — README ============ -->
+<section id="readme" class="view active">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2 class="vh">A judgment layer over the raw signal.</h2>
+    <p class="lede">Every claim arrives as plain-language signal: what a customer or technician actually typed. The console runs each one through Cars24's <strong>Lifetime Warranty Plan</strong> rubric in a fixed order, decides the unambiguous ones outright with the exact clause cited, and routes the genuinely ambiguous ones to a human with a written handover. It never forces a decision it can't defend.</p>
+    <div class="scope-note">This console scopes to the <strong>Lifetime Warranty Plan</strong> only. Cars24's 30-day and 12-month warranty tiers are out of scope for this build by design. The rubric, states, and decisions here apply to the Lifetime Warranty Plan terms exclusively.</div>
+
+    <div class="readme-grid">
+
+      <div class="card">
+        <h3><span class="dot"></span>What's covered</h3>
+        <ul class="rubric-list">
+          <li><span class="tag">Engine</span><span>Cylinder head, block, crankshaft, rods, pistons, rings, camshaft, valves, oil/water/vacuum pumps. <b>Seals excluded.</b></span></li>
+          <li><span class="tag">Transmission</span><span>Manual & automatic: gears, shafts, selectors, synchromesh hubs, planetary sets. (MT / AT / AMT / CVT)</span></li>
+          <li><span class="tag">Drivetrain</span><span>Propeller shaft, universal joints, front & rear differentials.</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="dot"></span>What voids or excludes</h3>
+        <ul class="rubric-list">
+          <li><span class="tag">Voids all</span><span>Missed service (6mo/6,000km), 12yr / 1,50,000km cap, commercial use, ownership transfer, misuse, tampering.</span></li>
+          <li><span class="tag">Excludes</span><span>Wear-and-tear (clutch plates, belts, tyres), cosmetic, accident/flood, non-powertrain electronics, consumables.</span></li>
+        </ul>
+      </div>
+
+      <div class="card flow">
+        <h3><span class="dot"></span>Decision order · strict sequence</h3>
+        <div class="flow-steps">
+          <div class="flow-step deny"><div class="n">1</div><h4>Void check first</h4><p>Any void condition? Deny outright, cite it. A voided warranty makes coverage moot, so this runs before everything.</p></div>
+          <div class="flow-step deny"><div class="n">2</div><h4>Coverage</h4><p>Failed part outside the three covered systems? Deny, outside coverage scope.</p></div>
+          <div class="flow-step deny"><div class="n">3</div><h4>Exclusion</h4><p>Covered system, but failure stems from an excluded cause (wear, flood)? Deny, cite the exclusion.</p></div>
+          <div class="flow-step app"><div class="n">4</div><h4>Approve</h4><p>Passes all three cleanly? Auto-approve, zero human touch.</p></div>
+          <div class="flow-step esc"><div class="n">5</div><h4>Escalate</h4><p>Cause genuinely ambiguous: can't separate covered-defect from excluded-cause? Hand to a human with a note.</p></div>
+        </div>
+        <div class="legend">
+          <span class="badge b-app"><span class="bd"></span>Auto-Approved</span>
+          <span class="badge b-no"><span class="bd"></span>Auto-Denied</span>
+          <span class="badge b-esc"><span class="bd"></span>Escalated</span>
+          <span class="badge b-app manual"><span class="bd"></span>Manually Approved</span>
+          <span class="badge b-no manual"><span class="bd"></span>Manually Denied</span>
+        </div>
+      </div>
+
+      <div class="card why">
+        <p><b>Why a triage layer at all.</b> Cars24's Lifetime Warranty is a trust instrument, the longest cover in the used-car market. At volume, that promise lives or dies on claim handling: a wrong or slow denial on a covered fault erodes the brand more than the claim ever cost. The job here is consistency and speed on the clear cases, so human judgment is spent only where it's actually needed.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2 — INSIGHTS ============ -->
+<section id="insights" class="view">
+  <div class="wrap">
+    <div class="eyebrow">Insights · this batch</div>
+    <h2 class="vh">What the rubric surfaces across <span id="totalN">40</span> claims.</h2>
+    <p class="lede">A read on this synthetic batch. Not a claim about Cars24's real claim mix, which isn't public. The point is the shape the layer produces: most claims decided cleanly, a sharp minority escalated, and a denial split that points somewhere useful. Action an escalation in the queue and every figure here recomputes live.</p>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="label">Decided with zero human review
+          <span class="info">i<span class="tip">On this batch. At real volume, this is the share of claims that never reach a reviewer: the turnaround and cost lever behind faster approvals.</span></span>
+        </div>
+        <div class="big"><span id="mZeroPct">82</span><small>%</small></div>
+        <div class="note"><span id="mZeroN">33</span> of <span class="mTot">40</span> auto-decided</div>
+      </div>
+      <div class="metric">
+        <div class="label">Auto-approved</div>
+        <div class="big" style="color:var(--ok)"><span id="mApp">17</span></div>
+        <div class="note">clean covered faults, clause cited</div>
+      </div>
+      <div class="metric">
+        <div class="label">Escalated to a human
+          <span class="info">i<span class="tip">The cases the rubric refuses to force. Each carries a handover note naming what's ambiguous and what would resolve it.</span></span>
+        </div>
+        <div class="big" style="color:var(--esc)"><span id="mEsc">7</span></div>
+        <div class="note"><span id="mEscPct">17.5</span>% of the batch</div>
+      </div>
+      <div class="metric">
+        <div class="label">Denials that are void-driven
+          <span class="info">i<span class="tip">A void-heavy denial mix points upstream, to customer education and eligibility at sale, not to a claims-handling gap. Different problem, different owner.</span></span>
+        </div>
+        <div class="big" style="color:var(--no)"><span id="mVoidPct">37</span><small>%</small></div>
+        <div class="note"><span id="mVoidN">6</span> of <span id="mDenN">16</span> denials</div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="chart">
+        <h3>Decision split</h3>
+        <div class="csub">Live — shifts when an escalation is actioned</div>
+        <div class="split" id="splitBar"></div>
+        <div class="split-key">
+          <span><i style="background:var(--ok)"></i>Approved <b class="mono" id="kApp"></b></span>
+          <span><i style="background:var(--no)"></i>Denied <b class="mono" id="kNo"></b></span>
+          <span><i style="background:var(--esc)"></i>Escalated <b class="mono" id="kEsc"></b></span>
+        </div>
+      </div>
+      <div class="chart">
+        <h3>Why claims get denied</h3>
+        <div class="csub">Void-condition vs coverage/exclusion</div>
+        <div id="denyBars"></div>
+      </div>
+    </div>
+
+    <div class="charts" style="margin-top:14px">
+      <div class="chart" style="grid-column:1/-1">
+        <h3>Claims by component</h3>
+        <div class="csub">Where the volume sits across the rubric's categories</div>
+        <div id="compBars"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 3 — QUEUE ============ -->
+<section id="queue" class="view">
+  <div class="wrap">
+    <div class="eyebrow">Claims queue</div>
+    <h2 class="vh">Every claim, every decision, the clause behind it.</h2>
+    <p class="lede">Click any row for the full symptom, the decision trace, and the clause cited. Escalated rows carry a handover note and let you action the call as a human reviewer: the badge, the split, and the insights all update live.</p>
+
+    <div class="filters">
+      <div class="fgroup">
+        <label>Status</label>
+        <select id="fStatus">
+          <option value="">All statuses</option>
+          <option>Auto-Approved</option>
+          <option>Auto-Denied</option>
+          <option>Escalated</option>
+          <option>Manually Approved</option>
+          <option>Manually Denied</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label>Component</label>
+        <select id="fCat">
+          <option value="">All components</option>
+          <option>Engine</option>
+          <option>Transmission</option>
+          <option>Drivetrain</option>
+          <option>Outside coverage</option>
+          <option>Void condition</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label>Sub-category</label>
+        <select id="fSub" disabled><option value="">—</option></select>
+      </div>
+      <span class="fcount" id="fCount"></span>
+      <button class="fclear" id="fClear">Clear filters</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:74px">Claim</th>
+          <th style="width:190px">Component</th>
+          <th>Symptom</th>
+          <th style="width:172px">Status</th>
+          <th style="width:96px">Confidence</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 4 — LIVE AGENT ============ -->
+<section id="agent" class="view">
+  <div class="wrap">
+    <div class="eyebrow">Live agent</div>
+    <h2 class="vh">Run a claim through the agent, live.</h2>
+    <p class="lede">Type a claim the way a customer or technician would, or load one of the 40 seed claims and edit it. The void checks run deterministically in your browser, they can't be wrong. If the warranty holds, the symptom goes to the model, which judges coverage, exclusion, or genuine ambiguity and returns the same structured decision you see in the queue. <span class="agent-note">Live call · Groq · llama-3.3-70b</span></p>
+
+    <div class="agent-grid">
+      <form class="agent-form" id="agentForm" autocomplete="off">
+        <div>
+          <label for="seedPick">Load a seed claim (optional)</label>
+          <select id="seedPick"><option value="">Start blank…</option></select>
+        </div>
+        <div>
+          <label for="aSymptom">Reported symptom</label>
+          <textarea id="aSymptom" rows="3" placeholder="e.g. Gearbox whining at low speed, getting louder over the last week"></textarea>
+        </div>
+        <div class="frow">
+          <div class="fgroup"><label for="aAge">Age (years)</label><input type="number" id="aAge" min="0" max="25" value="4" /></div>
+          <div class="fgroup"><label for="aOdo">Odometer (km)</label><input type="number" id="aOdo" min="0" step="1000" value="55000" /></div>
+          <div class="fgroup"><label for="aSvc">Last service (mo)</label><input type="number" id="aSvc" min="0" max="60" value="3" /></div>
+        </div>
+        <div class="frow">
+          <div class="fgroup"><label for="aUse">Usage</label><select id="aUse"><option>Private</option><option>Commercial</option></select></div>
+          <div class="fgroup"><label for="aOwn">Ownership</label><select id="aOwn"><option>Original</option><option>Transferred</option></select></div>
+          <div class="fgroup"><label for="aRen">Renewal</label><select id="aRen"><option>Current</option><option>Lapsed</option></select></div>
+        </div>
+        <button type="submit" class="btn-run" id="aRun">Adjudicate claim →</button>
+        <div class="agent-disc">Void checks run in your browser. Non-void claims are sent to the model for judgment. Nothing is stored.</div>
+      </form>
+
+      <div class="agent-result" id="agentResult">
+        <div class="ar-empty">The decision, the rubric trace, and the clause cited will appear here.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<footer>
+  <div class="wrap" style="padding:0">
+    Synthetic dataset · 40 claims · Cars24 Lifetime Warranty Plan rubric (publicly published coverage, exclusion & void terms). Built as a self-initiated demo. No real claims, customers, or systems are represented.
+  </div>
+</footer>
+
+<script>
+/* ---------------- DATA ----------------
+   Each claim: fixed rubric fields + a decision.
+   denyType: 'void' | 'coverage' | 'exclusion'  (denied claims only)
+   covered:  short name of the covered system/part (for the trace, covered claims)
+   voidNote: why the void check fails (void claims)
+------------------------------------------ */
+const CLAIMS = [
+  {id:"C-01",date:"2025-01-15",age:3,odo:41000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Engine making a knocking noise on startup",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered internal wear vs excluded oil neglect",reason:"Knocking could be a covered internal fault (rod bearing) or an uncovered cause (oil starvation, low oil). Vehicle data is clean, but the cause can't be read from the symptom alone.",handover:"Vehicle data is clean — no void condition applies. Cause of knocking noise is ambiguous between a covered internal fault and uncovered oil-related neglect. Recommend workshop inspection to confirm oil level history and source of noise before deciding."},
+  {id:"C-02",date:"2024-11-02",age:4,odo:52000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Oil system",symptom:"Oil leak near the engine block",decision:"Auto-Approved",conf:"High",covered:"Engine block",clause:"Engine block — covered component",reason:"Engine block is an explicitly covered component. Vehicle data clean, no exclusion or void condition triggered."},
+  {id:"C-03",date:"2025-03-20",age:2,odo:18000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Cooling",symptom:"Engine overheating during highway driving",decision:"Escalated",conf:"Low",covered:"Water pump",clause:"Cause ambiguous — covered water pump vs excluded coolant neglect",reason:"Water pump is covered, but overheating can also stem from coolant neglect (excluded). Service is current, so neglect is less likely — but can't be confirmed from the symptom.",handover:"Vehicle data clean, service is current, so neglect seems less likely but cannot be ruled out from this description. Recommend workshop diagnostic to confirm whether overheating stems from water pump failure (covered) or coolant system neglect (excluded)."},
+  {id:"C-04",date:"2023-08-10",age:5,odo:67000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Valve",symptom:"Engine misfiring, rough idle",decision:"Auto-Approved",conf:"High",covered:"Valves",clause:"Valve-train — covered component",reason:"Valve-related fault is within covered scope. Vehicle data clean, no exclusion or void condition."},
+  {id:"C-05",date:"2024-06-18",age:4,odo:58000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"AT",symptom:"Automatic transmission slipping between gears",decision:"Auto-Approved",conf:"High",covered:"Transmission gears",clause:"Transmission gears/selectors — covered",reason:"Transmission gears/selectors covered under Lifetime Warranty Plan. Vehicle data clean, no void condition."},
+  {id:"C-06",date:"2022-12-05",age:6,odo:89000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"MT",symptom:"Clutch fully gone, car won't move in gear",decision:"Auto-Denied",conf:"High",denyType:"exclusion",covered:"Manual transmission",clause:"Clutch plate — wear-and-tear, excluded",reason:"Clutch plates are an explicit wear-and-tear exclusion under the Lifetime Warranty Plan, even though the manual transmission itself is a covered system. Denied on the exclusion."},
+  {id:"C-07",date:"2024-02-28",age:4,odo:49000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"AMT",symptom:"Gearbox not engaging any gear",decision:"Auto-Approved",conf:"High",covered:"Selector mechanism",clause:"Selector/shaft mechanism — covered",reason:"Selector/shaft mechanism is covered. Vehicle data clean, no void condition."},
+  {id:"C-08",date:"2023-05-14",age:5,odo:71000,svc:6,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"CVT",symptom:"Whining noise from gearbox at low speed",decision:"Escalated",conf:"Low",covered:"CVT transmission",clause:"Cause ambiguous — covered defect vs excluded belt wear",reason:"CVT belt/pulley wear is often an excluded consumable, but the whine could also be a covered internal defect. Vehicle data clean; cause is ambiguous.",handover:"No void condition applies. Core ambiguity: is this normal CVT belt wear (excluded) or a covered internal transmission fault? Recommend workshop inspection of belt/pulley condition to confirm before deciding."},
+  {id:"C-09",date:"2024-09-01",age:3,odo:35000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"AT",symptom:"Harsh shifting, jerks between 2nd and 3rd gear",decision:"Auto-Approved",conf:"High",covered:"Transmission gears",clause:"Transmission system — covered",reason:"Within covered transmission system. Vehicle data clean, no void condition."},
+  {id:"C-10",date:"2023-11-22",age:4,odo:62000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"Differential",symptom:"Grinding sound from rear differential",decision:"Auto-Approved",conf:"High",covered:"Rear differential",clause:"Differential — covered component",reason:"Differential explicitly covered. Vehicle data clean, no void condition."},
+  {id:"C-11",date:"2024-04-09",age:3,odo:44000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"Propeller shaft",symptom:"Vibration at high speed, gets worse with acceleration",decision:"Auto-Approved",conf:"High",covered:"Propeller shaft",clause:"Propeller shaft / U-joint — covered",reason:"Propeller shaft/U-joint covered, matches a known fault pattern. Vehicle data clean."},
+  {id:"C-12",date:"2022-09-30",age:6,odo:93000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"U-joint",symptom:"Clunking noise when turning at low speed",decision:"Auto-Approved",conf:"High",covered:"Universal joint",clause:"Universal joint — covered component",reason:"Universal joint explicitly covered. Vehicle data clean, no void condition."},
+  {id:"C-13",date:"2024-07-12",age:3,odo:38000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Glass",symptom:"Windshield cracked, spreading from corner",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Glass — outside coverage scope",reason:"Glass damage is not covered under the Lifetime Warranty Plan, regardless of vehicle condition."},
+  {id:"C-14",date:"2023-10-05",age:4,odo:55000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Electronics",symptom:"AC not cooling properly",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Non-powertrain electronics — excluded",reason:"Non-powertrain electronics explicitly excluded under Lifetime Warranty Plan terms."},
+  {id:"C-15",date:"2024-01-25",age:3,odo:29000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Cosmetic",symptom:"Paint chipping on rear bumper",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Cosmetic damage — excluded",reason:"Cosmetic damage explicitly excluded under Lifetime Warranty Plan terms."},
+  {id:"C-16",date:"2023-03-17",age:5,odo:71000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Electronics",symptom:"Infotainment touchscreen freezing",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Non-powertrain electronics — excluded",reason:"Non-powertrain electronics explicitly excluded under Lifetime Warranty Plan terms."},
+  {id:"C-17",date:"2024-08-03",age:4,odo:32000,svc:14,use:"Private",ren:"Current",own:"Original",cat:"Void condition",sub:"Service lapse",symptom:"Engine making a knocking noise",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Last service 14 months ago — exceeds the required 6-month / 6,000km schedule.",clause:"Service lapse — warranty void",reason:"Engine knock would otherwise be a covered fault, but the service interval (14 months) exceeds the required schedule — this voids the warranty outright, overriding component coverage."},
+  {id:"C-18",date:"2025-02-11",age:6,odo:28000,svc:3,use:"Commercial",ren:"Current",own:"Original",cat:"Void condition",sub:"Commercial use",symptom:"Transmission failure, won't shift",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Vehicle registered for commercial use (taxi).",clause:"Commercial use — warranty void",reason:"Transmission would otherwise be covered, but the vehicle is registered for commercial use — this voids the warranty outright, overriding component coverage."},
+
+  {id:"C-19",date:"2024-05-22",age:4,odo:53000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Heavy rumble from the bottom end under load",decision:"Auto-Approved",conf:"High",covered:"Crankshaft",clause:"Crankshaft — covered component",reason:"Crankshaft is an explicitly covered component and the noise matches a covered internal failure. Vehicle data clean, no void condition."},
+  {id:"C-20",date:"2024-03-14",age:5,odo:64000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Oil system",symptom:"Low oil pressure warning light staying on",decision:"Auto-Approved",conf:"High",covered:"Oil pump",clause:"Oil pump — covered component",reason:"Oil pump is an explicitly covered component. Vehicle data clean, no exclusion or void condition."},
+  {id:"C-21",date:"2023-12-19",age:5,odo:69000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Cooling",symptom:"Water pump seized, belt squealing then snapped",decision:"Auto-Approved",conf:"High",covered:"Water pump",clause:"Water pump — covered component",reason:"Water pump is covered and the failure is a mechanical seizure of the pump itself. Service is current, so coolant neglect is ruled out — clean approve. (Distinct from C-03, where the cause of overheating was ambiguous.)"},
+  {id:"C-22",date:"2024-10-08",age:4,odo:47000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Valve",symptom:"Ticking from the top of the engine, traced to the camshaft",decision:"Auto-Approved",conf:"High",covered:"Camshaft",clause:"Camshaft — covered component",reason:"Camshaft is an explicitly covered component. Vehicle data clean, no exclusion or void condition."},
+  {id:"C-23",date:"2024-01-30",age:5,odo:60000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"AT",symptom:"No drive in any gear, planetary set failed",decision:"Auto-Approved",conf:"High",covered:"Planetary gear set",clause:"Planetary gear set — covered",reason:"Planetary gear set is explicitly covered under the transmission system. Vehicle data clean, no void condition."},
+  {id:"C-24",date:"2024-07-25",age:3,odo:39000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"AMT",symptom:"Shift actuator not engaging gears, car stuck in neutral",decision:"Auto-Approved",conf:"High",covered:"Selector mechanism",clause:"Selector / shift mechanism — covered",reason:"The selector/shift mechanism is covered. Vehicle data clean, no void condition."},
+  {id:"C-25",date:"2023-09-11",age:5,odo:66000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"Differential",symptom:"Front differential howling under load",decision:"Auto-Approved",conf:"High",covered:"Front differential",clause:"Front differential — covered",reason:"Front differential explicitly covered. Vehicle data clean, no void condition."},
+  {id:"C-26",date:"2024-06-03",age:4,odo:51000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"U-joint",symptom:"Driveline clunk on take-off, U-joint has play",decision:"Auto-Approved",conf:"High",covered:"Universal joint",clause:"Universal joint — covered",reason:"Universal joint explicitly covered and the play matches a known fault pattern. Vehicle data clean."},
+  {id:"C-27",date:"2023-07-29",age:5,odo:72000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"MT",symptom:"3rd gear crunches on every shift, synchro worn",decision:"Auto-Approved",conf:"High",covered:"Synchromesh hub",clause:"Synchromesh hub — covered",reason:"Synchromesh hubs are explicitly covered under the transmission system — distinct from clutch-plate wear, which is excluded (see C-06). Clean approve."},
+
+  {id:"C-28",date:"2024-04-17",age:4,odo:48000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Electronics",symptom:"Power windows stopped working on both doors",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Non-powertrain electronics — excluded",reason:"Power windows are non-powertrain electronics, explicitly excluded under Lifetime Warranty Plan terms."},
+  {id:"C-29",date:"2023-11-06",age:4,odo:57000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Cosmetic",symptom:"Driver's seat upholstery torn at the bolster",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Cosmetic / interior trim — excluded",reason:"Interior trim and cosmetic wear are explicitly excluded under Lifetime Warranty Plan terms."},
+  {id:"C-30",date:"2024-02-21",age:5,odo:74000,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Timing belt snapped, engine won't turn over",decision:"Auto-Denied",conf:"High",denyType:"exclusion",covered:"Engine assembly",clause:"Timing belt — consumable/wear, excluded",reason:"The engine assembly is a covered system, but the timing belt is a consumable wear item, explicitly excluded. Denied on the exclusion even though the failure sits inside the engine."},
+  {id:"C-31",date:"2024-08-19",age:3,odo:36000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Outside coverage",sub:"Glass",symptom:"Sunroof glass shattered on a rough road",decision:"Auto-Denied",conf:"High",denyType:"coverage",clause:"Glass — outside coverage scope",reason:"Glass is not covered under the Lifetime Warranty Plan, regardless of vehicle condition."},
+  {id:"C-32",date:"2024-09-27",age:4,odo:50000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Engine hydrolocked after driving through flood water",decision:"Auto-Denied",conf:"High",denyType:"exclusion",covered:"Engine assembly",clause:"Flood damage — excluded",reason:"The engine is a covered system, but the failure stems from flood-water ingestion — flood damage is an explicit exclusion regardless of which component failed."},
+  {id:"C-33",date:"2024-12-02",age:13,odo:162000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Void condition",sub:"Age / mileage cap",symptom:"Engine block cracked, coolant in the oil",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Vehicle is 13 years / 1,62,000 km — past the 12-year / 1,50,000 km cap.",clause:"Age / mileage cap — warranty lapsed",reason:"Engine block would otherwise be covered, but the vehicle exceeds the 12-year / 1,50,000 km cap. The warranty has lapsed by age and mileage; component coverage is moot."},
+  {id:"C-34",date:"2025-01-08",age:5,odo:61000,svc:3,use:"Private",ren:"Current",own:"Transferred",cat:"Void condition",sub:"Ownership transfer",symptom:"Automatic gearbox failure, no drive",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Vehicle is with a second owner — the plan is non-transferable.",clause:"Non-transferable — warranty void on transfer",reason:"The transmission would otherwise be covered, but the Lifetime Warranty Plan is non-transferable and the vehicle is with a second owner — warranty void on transfer, overriding component coverage."},
+  {id:"C-35",date:"2024-10-30",age:5,odo:70000,svc:16,use:"Private",ren:"Current",own:"Original",cat:"Void condition",sub:"Service lapse",symptom:"Whine from the gearbox, getting louder",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Last service 16 months ago — well past the 6-month / 6,000km schedule.",clause:"Service lapse — warranty void",reason:"The transmission fault would otherwise route for review, but the service interval (16 months) exceeds the required schedule — this voids the warranty outright."},
+  {id:"C-36",date:"2024-11-15",age:4,odo:43000,svc:3,use:"Commercial",ren:"Current",own:"Original",cat:"Void condition",sub:"Commercial use",symptom:"Engine knock under acceleration",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Vehicle registered as fleet / rental use.",clause:"Commercial use — warranty void",reason:"The engine fault would otherwise be covered, but the vehicle is registered for commercial (fleet/rental) use — this voids the warranty outright, overriding component coverage."},
+
+  {id:"C-37",date:"2024-12-20",age:3,odo:40000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Intermittent power loss, no warning lights, can't reproduce",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered fuel fault vs excluded sensor",reason:"Symptom could stem from a covered fuel/injection fault or from an excluded non-powertrain sensor. No fault codes captured; cause not isolable from the description.",handover:"No void condition applies. Power loss is intermittent with no codes captured, so the root can't be assigned to a covered mechanical fault vs an excluded electronic sensor. Recommend a diagnostic scan under load to localise before deciding."},
+  {id:"C-38",date:"2025-01-19",age:4,odo:54000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"CVT",symptom:"Slight shudder during acceleration, comes and goes",decision:"Escalated",conf:"Low",covered:"CVT transmission",clause:"Cause ambiguous — covered internal fault vs excluded belt glaze",reason:"Intermittent CVT shudder can indicate a covered internal transmission fault or normal belt glazing (an excluded consumable). Can't be separated from the description.",handover:"No void condition applies. The shudder could be a covered internal CVT fault or excluded belt-glaze wear. Recommend a fluid and belt-condition inspection to confirm the source before deciding."},
+  {id:"C-39",date:"2024-11-28",age:4,odo:56000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"Differential",symptom:"Faint humming at 60+ km/h, can't pin down where it's from",decision:"Escalated",conf:"Low",covered:"Differential",clause:"Cause ambiguous — covered differential vs excluded wheel bearing",reason:"Humming at speed could be the differential (covered), a wheel bearing (wear, excluded), or tyre noise (excluded). Source not isolable from the description.",handover:"No void condition applies. The noise source isn't isolable — differential (covered) vs wheel bearing or tyre (excluded). Recommend a road test with a chassis-ear check to localise before deciding."},
+  {id:"C-40",date:"2025-02-04",age:3,odo:33000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Cooling",symptom:"Losing coolant steadily, no visible leak anywhere",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered head/block vs excluded seal",reason:"Internal coolant loss could be a covered head/block fault or an excluded seal/gasket — seals are excluded even within covered systems. Can't be determined from the symptom.",handover:"No void condition applies. Internal coolant loss could be a covered head or block fault, or an excluded seal/gasket. Recommend a cooling-system pressure test to confirm whether the loss is internal-covered or seal-related before deciding."}
+];
+
+/* sub-category map for dependent filter */
+const SUBMAP = {};
+CLAIMS.forEach(c=>{ (SUBMAP[c.cat] = SUBMAP[c.cat]||new Set()).add(c.sub); });
+
+/* ---------------- STATE ---------------- */
+let filters = {status:"", cat:"", sub:""};
+
+/* ---------------- NAV ---------------- */
+const navBtns = document.querySelectorAll('nav.pill button');
+navBtns.forEach(b=>b.addEventListener('click',()=>{
+  navBtns.forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(b.dataset.view==='readme'?'readme':b.dataset.view).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+
+/* ---------------- HELPERS ---------------- */
+function badgeFor(d){
+  if(d==='Auto-Approved') return '<span class="badge b-app"><span class="bd"></span>Auto-Approved</span>';
+  if(d==='Auto-Denied')   return '<span class="badge b-no"><span class="bd"></span>Auto-Denied</span>';
+  if(d==='Escalated')     return '<span class="badge b-esc"><span class="bd"></span>Escalated</span>';
+  if(d==='Manually Approved') return '<span class="badge b-app manual"><span class="bd"></span>Manually Approved</span><span class="human-tag">✓ human-reviewed</span>';
+  if(d==='Manually Denied')   return '<span class="badge b-no manual"><span class="bd"></span>Manually Denied</span><span class="human-tag">✓ human-reviewed</span>';
+  return d;
+}
+function isApproved(d){return d==='Auto-Approved'||d==='Manually Approved';}
+function isDenied(d){return d==='Auto-Denied'||d==='Manually Denied';}
+function isEsc(d){return d==='Escalated';}
+
+/* ---------------- QUEUE TABLE ---------------- */
+function applyFilters(){
+  return CLAIMS.filter(c=>{
+    if(filters.status && c.decision!==filters.status) return false;
+    if(filters.cat && c.cat!==filters.cat) return false;
+    if(filters.sub && c.sub!==filters.sub) return false;
+    return true;
+  });
+}
+function renderTable(){
+  const rows = applyFilters();
+  const tb = document.getElementById('tbody');
+  document.getElementById('fCount').textContent = rows.length+' of '+CLAIMS.length;
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="5" class="empty">No claims match these filters.</td></tr>'; return; }
+  tb.innerHTML = rows.map(c=>`
+    <tr onclick="openModal('${c.id}')">
+      <td class="cid">${c.id}</td>
+      <td class="comp"><span class="cat">${c.cat}</span><br><span class="scat">${c.sub}</span></td>
+      <td class="sym"><span class="clip">${c.symptom}</span></td>
+      <td>${badgeFor(c.decision)}</td>
+      <td><span class="conf ${c.conf==='Low'?'low':''}">${c.conf}</span></td>
+    </tr>`).join('');
+}
+
+/* ---------------- DECISION TRACE ---------------- */
+function buildTrace(c){
+  const s=[];
+  const voidPass = {k:'Void check',r:'pass',n:'No void condition: service current, within the 12yr / 1,50,000km cap, private use, original owner.'};
+  if(c.cat==='Void condition'){
+    s.push({k:'Void check',r:'fail',n:c.voidNote});
+    s.push({k:'Coverage',r:'skip',n:'Not evaluated — a void condition invalidates the warranty before coverage is checked.'});
+    s.push({k:'Exclusion',r:'skip',n:'Not evaluated.'});
+    s.push({k:'Decision',r:'deny',n:c.clause});
+    return s;
+  }
+  s.push(voidPass);
+  if(c.cat==='Outside coverage'){
+    s.push({k:'Coverage',r:'fail',n:c.clause});
+    s.push({k:'Exclusion',r:'skip',n:'Not evaluated — failed part is outside the three covered systems.'});
+    s.push({k:'Decision',r:'deny',n:'Outside coverage scope.'});
+    return s;
+  }
+  s.push({k:'Coverage',r:'pass',n:(c.covered||'Covered system')+' is within the three covered systems.'});
+  if(isDenied(c.decision)){ // exclusion within a covered system
+    s.push({k:'Exclusion',r:'fail',n:c.clause});
+    s.push({k:'Decision',r:'deny',n:c.reason});
+    return s;
+  }
+  if(isEsc(c.decision)){
+    s.push({k:'Exclusion',r:'flag',n:c.reason});
+    s.push({k:'Decision',r:'esc',n:'Cause can\'t be cleanly assigned to covered-defect vs excluded-cause, so it\'s routed to a human.'});
+    return s;
+  }
+  s.push({k:'Exclusion',r:'pass',n:'Failure stems from the covered component itself, not an excluded cause.'});
+  s.push({k:'Decision',r:'app',n:c.clause});
+  return s;
+}
+function traceHTML(c){
+  const map={pass:['n-pass','r-pass','✓','PASS'],fail:['n-fail','r-fail','✕','FAIL'],flag:['n-flag','r-flag','!','AMBIGUOUS'],skip:['n-skip','r-skip','–','SKIPPED'],deny:['n-deny','r-fail','✕','DENY'],app:['n-app','r-pass','✓','APPROVE'],esc:['n-esc','r-flag','!','ESCALATE']};
+  return '<div class="trace">'+buildTrace(c).map(st=>{
+    const m=map[st.r];
+    return `<div class="trace-step">
+      <div class="trace-rail"><div class="trace-node ${m[0]}">${m[2]}</div><div class="trace-line"></div></div>
+      <div class="trace-body"><div class="ts-name">${st.k} <span class="ts-res ${m[1]}">${m[3]}</span></div><div class="ts-note">${st.n}</div></div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+/* ---------------- MODAL ---------------- */
+function openModal(id){
+  const c = CLAIMS.find(x=>x.id===id);
+  const esc = isEsc(c.decision);
+  const m = document.getElementById('modal');
+  m.innerHTML = `
+    <div class="modal-head">
+      <div class="mtop">
+        <span class="cid">${c.id}</span>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <h3>${c.cat} · ${c.sub}</h3>
+      <div class="modal-meta">
+        <span class="chip">${badgeForChip(c.decision)}</span>
+        <span class="chip">Confidence: ${c.conf}</span>
+        <span class="chip">Age ${c.age}y</span>
+        <span class="chip">${c.odo.toLocaleString('en-IN')} km</span>
+        <span class="chip">Service ${c.svc}mo ago</span>
+        <span class="chip">${c.use}</span>
+        <span class="chip">${c.own} owner</span>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="mlabel">Reported symptom</div>
+      <div class="symtext">"${c.symptom}"</div>
+
+      <div class="mlabel">Decision trace — rubric order</div>
+      ${traceHTML(c)}
+
+      <div class="mlabel">Reasoning · clause cited</div>
+      <div class="reason">${c.reason}</div>
+      <div class="clause-cite">▸ ${c.clause}</div>
+
+      ${esc ? `<div class="mlabel">Handover note — for the human picking this up</div>
+        <div class="handover-box"><div class="ho-h">⚑ Escalation handover</div>${c.handover}</div>` : ''}
+
+      <div id="actionZone">${esc ? actionButtons() : resolvedNote(c)}</div>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+  m.dataset.cid = id;
+  document.body.style.overflow='hidden';
+}
+function badgeForChip(d){ // plain text status for the chip
+  return d;
+}
+function actionButtons(){
+  return `<div class="actions">
+    <span class="ahint">Action as a human reviewer — the badge, the split and the insights all update live.</span>
+    <button class="btn btn-no" onclick="resolve('Manually Denied')">Deny</button>
+    <button class="btn btn-app" onclick="resolve('Manually Approved')">Approve</button>
+  </div>`;
+}
+function resolvedNote(c){
+  if(c.decision.startsWith('Manually')){
+    return `<div class="resolved-note">✓ Actioned by a human reviewer this session — recorded as <b style="color:var(--ink);margin:0 4px">${c.decision}</b>.</div>`;
+  }
+  return `<div class="resolved-note">Decided automatically with no human review. The rubric reached this with high confidence.</div>`;
+}
+function resolve(newStatus){
+  const id = document.getElementById('modal').dataset.cid;
+  const c = CLAIMS.find(x=>x.id===id);
+  c.decision = newStatus;
+  c.conf = 'Reviewed';
+  // refresh modal action zone + meta badge
+  openModal(id);
+  renderTable();
+  renderInsights();
+}
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ---------------- INSIGHTS ---------------- */
+function renderInsights(){
+  const tot = CLAIMS.length;
+  const app = CLAIMS.filter(c=>isApproved(c.decision)).length;
+  const no  = CLAIMS.filter(c=>isDenied(c.decision)).length;
+  const esc = CLAIMS.filter(c=>isEsc(c.decision)).length;
+  const zero = app+no;
+  const voidDen = CLAIMS.filter(c=>isDenied(c.decision) && c.denyType==='void').length;
+
+  document.getElementById('totalN').textContent = tot;
+  document.querySelectorAll('.mTot').forEach(e=>e.textContent=tot);
+  document.getElementById('mZeroPct').textContent = Math.round(zero/tot*100);
+  document.getElementById('mZeroN').textContent = zero;
+  document.getElementById('mApp').textContent = app;
+  document.getElementById('mEsc').textContent = esc;
+  document.getElementById('mEscPct').textContent = (esc/tot*100).toFixed(1);
+  document.getElementById('mVoidPct').textContent = no? Math.round(voidDen/no*100):0;
+  document.getElementById('mVoidN').textContent = voidDen;
+  document.getElementById('mDenN').textContent = no;
+
+  // split bar
+  const sb = document.getElementById('splitBar');
+  sb.innerHTML =
+    `<span style="width:${app/tot*100}%;background:var(--ok)">${app}</span>`+
+    `<span style="width:${no/tot*100}%;background:var(--no)">${no}</span>`+
+    `<span style="width:${esc/tot*100}%;background:var(--esc)">${esc}</span>`;
+  document.getElementById('kApp').textContent = app;
+  document.getElementById('kNo').textContent = no;
+  document.getElementById('kEsc').textContent = esc;
+
+  // deny reason bars
+  const voidN = CLAIMS.filter(c=>isDenied(c.decision)&&c.denyType==='void').length;
+  const covN  = CLAIMS.filter(c=>isDenied(c.decision)&&c.denyType==='coverage').length;
+  const exN   = CLAIMS.filter(c=>isDenied(c.decision)&&c.denyType==='exclusion').length;
+  const denMax = Math.max(voidN,covN,exN,1);
+  document.getElementById('denyBars').innerHTML = [
+    ['Void condition',voidN,'var(--no)'],
+    ['Outside coverage',covN,'#c85a70'],
+    ['Exclusion (covered system)',exN,'#dd8a99']
+  ].map(([l,v,col])=>barRow(l,v,no,col,denMax)).join('');
+
+  // component bars
+  const cats=['Engine','Transmission','Drivetrain','Outside coverage','Void condition'];
+  const counts = cats.map(cat=>CLAIMS.filter(c=>c.cat===cat).length);
+  const cmax = Math.max(...counts,1);
+  document.getElementById('compBars').innerHTML = cats.map((cat,i)=>
+    barRow(cat,counts[i],tot,'var(--indigo)',cmax)).join('');
+}
+function barRow(label,val,denom,color,max){
+  const pct = max? (val/max*100):0;
+  return `<div class="bar-row">
+    <span class="blab">${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    <span class="bval">${val}${denom?` · ${Math.round(val/denom*100)}%`:''}</span>
+  </div>`;
+}
+
+/* ---------------- FILTERS ---------------- */
+const fStatus=document.getElementById('fStatus'), fCat=document.getElementById('fCat'), fSub=document.getElementById('fSub');
+fStatus.addEventListener('change',()=>{filters.status=fStatus.value;renderTable();});
+fCat.addEventListener('change',()=>{
+  filters.cat=fCat.value; filters.sub='';
+  if(filters.cat && SUBMAP[filters.cat]){
+    const subs=[...SUBMAP[filters.cat]];
+    fSub.innerHTML='<option value="">All sub-categories</option>'+subs.map(s=>`<option>${s}</option>`).join('');
+    fSub.disabled=false;
+  } else { fSub.innerHTML='<option value="">—</option>'; fSub.disabled=true; }
+  renderTable();
+});
+fSub.addEventListener('change',()=>{filters.sub=fSub.value;renderTable();});
+document.getElementById('fClear').addEventListener('click',()=>{
+  filters={status:'',cat:'',sub:''};
+  fStatus.value='';fCat.value='';fSub.innerHTML='<option value="">—</option>';fSub.disabled=true;
+  renderTable();
+});
+
+/* ---------------- LIVE AGENT (view 4) ---------------- */
+const AGENT_ENDPOINT='/.netlify/functions/adjudicate';
+const seedPick=document.getElementById('seedPick');
+const aSymptom=document.getElementById('aSymptom'),aAge=document.getElementById('aAge'),aOdo=document.getElementById('aOdo'),aSvc=document.getElementById('aSvc'),aUse=document.getElementById('aUse'),aOwn=document.getElementById('aOwn'),aRen=document.getElementById('aRen');
+
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+seedPick.innerHTML='<option value="">Start blank…</option>'+CLAIMS.map(c=>`<option value="${c.id}">${c.id} · ${escapeHtml(c.symptom.slice(0,44))}${c.symptom.length>44?'…':''}</option>`).join('');
+seedPick.addEventListener('change',()=>{
+  const c=CLAIMS.find(x=>x.id===seedPick.value); if(!c) return;
+  aSymptom.value=c.symptom; aAge.value=c.age; aOdo.value=c.odo; aSvc.value=c.svc;
+  aUse.value=c.use; aOwn.value=c.own; aRen.value=(c.ren==='Current'?'Current':'Lapsed');
+});
+
+/* deterministic void check — mirrors "check void first", runs in-browser */
+function checkVoid(f){
+  if(f.use==='Commercial') return {sub:'Commercial use',note:'Vehicle registered for commercial use (fleet / taxi / rental).',clause:'Commercial use — warranty void'};
+  if(f.own==='Transferred') return {sub:'Ownership transfer',note:'Vehicle is with a second owner; the plan is non-transferable.',clause:'Non-transferable — warranty void on transfer'};
+  if(f.ren==='Lapsed') return {sub:'Renewal lapsed',note:'Annual renewal has lapsed.',clause:'Renewal lapsed — warranty void'};
+  if(f.age>12) return {sub:'Age cap',note:'Vehicle is '+f.age+' years, past the 12-year cap.',clause:'Age cap — warranty lapsed'};
+  if(f.odo>150000) return {sub:'Mileage cap',note:'Odometer '+Number(f.odo).toLocaleString('en-IN')+' km, past the 1,50,000 km cap.',clause:'Mileage cap — warranty lapsed'};
+  if(f.svc>6) return {sub:'Service lapse',note:'Last service '+f.svc+' months ago, past the 6-month schedule.',clause:'Service lapse — warranty void'};
+  return null;
+}
+
+/* map the model's JSON to a claim-like object so it renders identically to the queue */
+function mapAgentData(d){
+  const dec=['Auto-Approved','Auto-Denied','Escalated'].includes(d&&d.decision)?d.decision:'Escalated';
+  const o={decision:dec,confidence:d&&d.confidence||(dec==='Escalated'?'Low':'High'),
+    clause:d&&d.clause||'Cause ambiguous — routed for review',
+    reason:d&&d.reasoning||'The model could not return a clean structured decision, so the claim is escalated for a human to review.',
+    handover:d&&d.handover||'',covered:d&&d.covered_system||'the covered system'};
+  if(dec==='Auto-Denied'&&d&&d.deny_type==='coverage'){o.cat='Outside coverage';}
+  else{
+    const cs=String(d&&d.covered_system||'').toLowerCase();
+    o.cat=/trans|gear|clutch|cvt|synchro|shift/.test(cs)?'Transmission':/drive|differ|propeller|prop shaft|u-joint|universal|joint/.test(cs)?'Drivetrain':'Engine';
+    o.denyType=d&&d.deny_type;
+  }
+  if(dec==='Escalated'&&!o.handover) o.handover='Cause cannot be cleanly assigned to a covered defect vs an excluded cause from the description. Recommend a workshop inspection to localise the source before deciding.';
+  return o;
+}
+
+function renderAgentLoading(){
+  document.getElementById('agentResult').innerHTML='<div class="ar-loading"><div class="spinner"></div><div>Running the claim through the rubric…</div></div>';
+}
+function renderAgentErr(m){
+  document.getElementById('agentResult').innerHTML='<div class="ar-err">'+escapeHtml(m)+'</div>';
+}
+function renderAgentResult(obj,f,meta){
+  const esc=isEsc(obj.decision);
+  const prov = meta.source==='code'
+    ? '<span class="dotcode"></span>Decided in-browser · void check, deterministic · model not called'
+    : '<span class="dotlive"></span>Decided live by the model · '+meta.ms+' ms · Groq llama-3.3-70b';
+  document.getElementById('agentResult').innerHTML=`
+    <div class="modal-meta" style="margin:0 0 2px">${badgeFor(obj.decision)}<span class="chip" style="margin-left:auto">Confidence: ${escapeHtml(obj.confidence)}</span></div>
+    <div class="mlabel" style="margin-top:16px">Claim facts</div>
+    <div class="modal-meta">
+      <span class="chip">Age ${escapeHtml(f.age)}y</span><span class="chip">${Number(f.odo).toLocaleString('en-IN')} km</span>
+      <span class="chip">Service ${escapeHtml(f.svc)}mo ago</span><span class="chip">${escapeHtml(f.use)}</span>
+      <span class="chip">${escapeHtml(f.own)} owner</span><span class="chip">Renewal ${escapeHtml(f.ren)}</span>
+    </div>
+    <div class="mlabel">Reported symptom</div>
+    <div class="symtext">"${escapeHtml(f.symptom)}"</div>
+    <div class="mlabel">Decision trace · rubric order</div>
+    ${traceHTML(obj)}
+    <div class="mlabel">Reasoning · clause cited</div>
+    <div class="reason">${escapeHtml(obj.reason)}</div>
+    <div class="clause-cite">▸ ${escapeHtml(obj.clause)}</div>
+    ${esc&&obj.handover?`<div class="mlabel">Handover note</div><div class="handover-box"><div class="ho-h">⚑ Escalation handover</div>${escapeHtml(obj.handover)}</div>`:''}
+    <div class="ar-prov">${prov}</div>`;
+}
+
+document.getElementById('agentForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const f={symptom:aSymptom.value.trim(),age:+aAge.value,odo:+aOdo.value,svc:+aSvc.value,use:aUse.value,own:aOwn.value,ren:aRen.value};
+  if(!f.symptom){ renderAgentErr('Enter a symptom to adjudicate.'); return; }
+  const v=checkVoid(f);
+  if(v){
+    renderAgentResult({decision:'Auto-Denied',confidence:'High',cat:'Void condition',voidNote:v.note,clause:v.clause,
+      reason:'Warranty is void: '+v.sub.toLowerCase()+'. A void condition is checked first and overrides component coverage, so the symptom is not sent to the model.'},f,{source:'code'});
+    return;
+  }
+  const btn=document.getElementById('aRun'); btn.disabled=true;
+  renderAgentLoading();
+  const t0=performance.now();
+  try{
+    const res=await fetch(AGENT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symptom:f.symptom})});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    renderAgentResult(mapAgentData(data),f,{source:'model',ms:Math.round(performance.now()-t0)});
+  }catch(err){
+    renderAgentErr('Could not reach the model ('+err.message+'). The deterministic void checks still ran in-browser; the live model judgment needs the deployed endpoint with the Groq key set (or `netlify dev` locally).');
+  }finally{ btn.disabled=false; }
+});
+
+/* ---------------- INIT ---------------- */
+renderTable();
+renderInsights();
+</script>
+</body>
+</html>
