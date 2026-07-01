@@ -291,9 +291,10 @@
 
 <nav class="pill">
   <button data-view="readme" class="active" aria-current="page"><span class="ix">01</span> How it works</button>
-  <button data-view="insights"><span class="ix">02</span> Insights</button>
-  <button data-view="queue"><span class="ix">03</span> Claims queue</button>
-  <button data-view="agent"><span class="ix">04</span> Live agent</button>
+  <button data-view="queue"><span class="ix">02</span> Claims queue</button>
+  <button data-view="agent"><span class="ix">03</span> Live agent</button>
+  <button data-view="insights"><span class="ix">04</span> Insights</button>
+  <button data-view="roadmap"><span class="ix">05</span> What's next</button>
 </nav>
 
 <!-- ============ VIEW 1 — README ============ -->
@@ -487,6 +488,48 @@
   </div>
 </section>
 
+<!-- ============ VIEW 5 — WHAT'S NEXT ============ -->
+<section id="roadmap" class="view">
+  <div class="wrap">
+    <div class="eyebrow">What's next</div>
+    <h2 class="vh">The real prize: warranty economics.</h2>
+    <p class="lede">Because the agent reads <strong>every approved claim</strong>, it's the natural place to cost-tag each refurb and weigh it against the fees collected — turning the warranty book from a black-box liability into a <strong>measured P&L</strong>.</p>
+
+    <div class="card" style="border:1px solid var(--brand);box-shadow:var(--shadow);margin-top:4px">
+      <div style="background:var(--panel,#f7f8fb);border:1px solid var(--line,#e7e9f0);border-radius:12px;padding:20px 22px">
+        <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:16px">Illustrative only — not from real data</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <span style="width:190px;font-size:14px;color:var(--ink)">Refurb paid out on a claim</span>
+            <div style="flex:1;height:30px;background:#eceef4;border-radius:7px;overflow:hidden"><div style="width:100%;height:100%;background:var(--no,#c0455e)"></div></div>
+            <span style="width:100px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600">~₹62,000</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <span style="width:190px;font-size:14px;color:var(--ink)">Fees collected on that car</span>
+            <div style="flex:1;height:30px;background:#eceef4;border-radius:7px;overflow:hidden"><div style="width:15%;height:100%;background:var(--ok,#2fae66)"></div></div>
+            <span style="width:100px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600">~₹9,000</span>
+          </div>
+        </div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6;margin:14px 0 0">One claiming car costs more than its own fees — so the ratio that matters is a <strong>portfolio</strong> number, measured live across the book, not reconstructed after the quarter closes.</p>
+      </div>
+      <p style="color:var(--muted);font-size:13.5px;line-height:1.6;margin:14px 0 0">Not a saving the agent invents — a human rejects a bad claim too. It's a <strong>capability the agent unlocks</strong> by sitting on every decision.</p>
+    </div>
+
+    <div class="readme-grid" style="margin-top:22px">
+      <div class="card">
+        <h3><span class="dot"></span>Ground it in the car's record</h3>
+        <p style="color:var(--muted);font-size:13.5px;line-height:1.6;margin:0">Pull the car's real service log, plan tier and odometer so the agent checks actual coverage — not form fields. The <b>C-42</b> and <b>C-43</b> escalations exist only because it can't yet see the source record.</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>Scale across the book</h3>
+        <p style="color:var(--muted);font-size:13.5px;line-height:1.6;margin:0">The rubric is component-and-clause based, not model-specific — the same logic runs across hundreds of models and thousands of claims, clearing the ~80% and cost-tagging as it goes.</p>
+      </div>
+    </div>
+
+    <div class="scope-note" style="margin-top:18px"><strong>Roadmap only —</strong> not built into this demo.</div>
+  </div>
+</section>
+
 <!-- modal -->
 <div class="overlay" id="overlay">
   <div class="modal" id="modal"></div>
@@ -494,7 +537,7 @@
 
 <footer>
   <div class="wrap" style="padding:0">
-    Synthetic data · 40 claims · Cars24 Lifetime Warranty Plan rubric · self-initiated demo, no real claims or systems.
+    Synthetic data · 43 claims · Cars24 Lifetime Warranty Plan rubric · self-initiated demo, no real claims or systems.
   </div>
 </footer>
 
@@ -548,7 +591,11 @@ const CLAIMS = [
   {id:"C-37",date:"2024-12-20",age:3,odo:40000,svc:3,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"General",symptom:"Intermittent power loss, no warning lights, can't reproduce",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered fuel fault vs excluded sensor",reason:"Symptom could stem from a covered fuel/injection fault or from an excluded non-powertrain sensor. No fault codes captured; cause not isolable from the description.",handover:"No void condition applies. Power loss is intermittent with no codes captured, so the root can't be assigned to a covered mechanical fault vs an excluded electronic sensor. Recommend a diagnostic scan under load to localise before deciding."},
   {id:"C-38",date:"2025-01-19",age:4,odo:54000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Transmission",sub:"CVT",symptom:"Slight shudder during acceleration, comes and goes",decision:"Escalated",conf:"Low",covered:"CVT transmission",clause:"Cause ambiguous — covered internal fault vs excluded belt glaze",reason:"Intermittent CVT shudder can indicate a covered internal transmission fault or normal belt glazing (an excluded consumable). Can't be separated from the description.",handover:"No void condition applies. The shudder could be a covered internal CVT fault or excluded belt-glaze wear. Recommend a fluid and belt-condition inspection to confirm the source before deciding."},
   {id:"C-39",date:"2024-11-28",age:4,odo:56000,svc:4,use:"Private",ren:"Current",own:"Original",cat:"Drivetrain",sub:"Differential",symptom:"Faint humming at 60+ km/h, can't pin down where it's from",decision:"Escalated",conf:"Low",covered:"Differential",clause:"Cause ambiguous — covered differential vs excluded wheel bearing",reason:"Humming at speed could be the differential (covered), a wheel bearing (wear, excluded), or tyre noise (excluded). Source not isolable from the description.",handover:"No void condition applies. The noise source isn't isolable — differential (covered) vs wheel bearing or tyre (excluded). Recommend a road test with a chassis-ear check to localise before deciding."},
-  {id:"C-40",date:"2025-02-04",age:3,odo:33000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Cooling",symptom:"Losing coolant steadily, no visible leak anywhere",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered head/block vs excluded seal",reason:"Internal coolant loss could be a covered head/block fault or an excluded seal/gasket — seals are excluded even within covered systems. Can't be determined from the symptom.",handover:"No void condition applies. Internal coolant loss could be a covered head or block fault, or an excluded seal/gasket. Recommend a cooling-system pressure test to confirm whether the loss is internal-covered or seal-related before deciding."}
+  {id:"C-40",date:"2025-02-04",age:3,odo:33000,svc:2,use:"Private",ren:"Current",own:"Original",cat:"Engine",sub:"Cooling",symptom:"Losing coolant steadily, no visible leak anywhere",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Cause ambiguous — covered head/block vs excluded seal",reason:"Internal coolant loss could be a covered head/block fault or an excluded seal/gasket — seals are excluded even within covered systems. Can't be determined from the symptom.",handover:"No void condition applies. Internal coolant loss could be a covered head or block fault, or an excluded seal/gasket. Recommend a cooling-system pressure test to confirm whether the loss is internal-covered or seal-related before deciding."},
+
+  {id:"C-41",date:"2024-10-14",age:5,odo:78000,svc:15,use:"Commercial",ren:"Current",own:"Original",cat:"Void condition",sub:"Multiple void conditions",symptom:"Transmission slipping badly, then no drive at all",decision:"Auto-Denied",conf:"High",denyType:"void",voidNote:"Two void conditions at once — vehicle is registered for commercial use AND last service was 15 months ago.",clause:"Multiple void conditions — warranty void",reason:"The transmission would otherwise be covered, but two independent void conditions apply at once: commercial registration and a 15-month service lapse. Either one alone voids the warranty. The void check fires on the first match (commercial use) but records that a second condition also applies, so the denial holds even if one were later disputed."},
+  {id:"C-42",date:"2024-12-11",age:5,odo:63000,svc:8,use:"Private",ren:"Current",own:"Original",cat:"Void condition",sub:"Service record disputed",symptom:"Engine knocking with low oil pressure",decision:"Escalated",conf:"Low",covered:"Engine assembly",clause:"Service record incomplete — void can't be confirmed or ruled out",reason:"The symptom points to a covered engine fault, but the service history has a gap around the 8-month mark with no workshop record. That gap could be a genuine lapse (which voids the warranty) or just a missing entry for a service that happened. The void check needs a confirmed data point it doesn't have, so it can't auto-deny or auto-approve.",handover:"No clean decision possible. The knock looks like a covered engine fault, but there's a hole in the service record near the 8-month service window. If that hole is a real lapse, the warranty is void; if it's a missing entry for a service that was done, coverage stands. Pull the full workshop service history to confirm before deciding — do not auto-approve or auto-deny on the current data."},
+  {id:"C-43",date:"2025-01-22",age:12,odo:149200,svc:5,use:"Private",ren:"Current",own:"Original",cat:"Void condition",sub:"Age / mileage cap (borderline)",symptom:"Rear differential whining under load",decision:"Escalated",conf:"Low",covered:"Differential",clause:"Inside the 12-yr / 1,50,000 km cap — but only just",reason:"The differential is covered and the vehicle is technically inside the cap at 12 years and 1,49,200 km. But the margin is under 800 km and it's in the final eligible year, so a small odometer discrepancy would push it past the limit. A deterministic check on a thin margin like this shouldn't auto-approve without confirming the exact reading.",handover:"Borderline on the coverage cap: recorded at 12 years and 1,49,200 km, just inside the 12-year / 1,50,000 km limit. Because the margin is under 800 km, confirm the exact odometer reading and registration date against records before approving — a minor discrepancy would void coverage."}
 ];
 
 /* sub-category map for dependent filter */
