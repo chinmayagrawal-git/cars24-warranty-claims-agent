@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Warranty Claims Triage Console · Cars24</title>
-<meta name="description" content="An internal ops console that auto-decides clear warranty claims with the clause cited and escalates the ambiguous ones with a handover note. Synthetic data, Cars24 Lifetime Warranty Plan rubric." />
+<meta name="description" content="Auto-decides clear warranty claims with the clause cited and escalates the ambiguous ones with a handover note. Synthetic data, Cars24 Lifetime Warranty Plan rubric." />
 <meta property="og:title" content="Warranty Claims Triage Console · Cars24" />
 <meta property="og:description" content="Auto-decides the clear cases. Escalates the ambiguous ones with a handover note." />
 <meta property="og:type" content="website" />
@@ -134,15 +134,16 @@
   .conf.low{color:var(--esc)}
 
   /* ---------- insights ---------- */
-  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:24px}
-  @media(max-width:840px){.metrics{grid-template-columns:1fr 1fr}}
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
+  @media(max-width:840px){.metrics{grid-template-columns:1fr}}
   .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);position:relative}
   .metric .label{font-size:12px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
   .metric .big{font-family:"DM Sans";font-weight:700;font-size:34px;letter-spacing:-1px;line-height:1.05;margin-top:8px}
   .metric .big small{font-size:15px;color:var(--muted-2);font-weight:500;letter-spacing:0}
   .metric .note{font-size:11.5px;color:var(--muted-2);margin-top:6px;line-height:1.4}
   .info{cursor:help;width:15px;height:15px;border-radius:50%;border:1px solid var(--border-strong);color:var(--muted-2);font-size:10px;font-family:"JetBrains Mono";display:inline-flex;align-items:center;justify-content:center;position:relative}
-  .info:hover .tip{opacity:1;transform:translateY(0);pointer-events:auto}
+  .info:hover .tip,.info:focus .tip{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .info:focus{outline:2px solid var(--indigo);outline-offset:1px}
   .tip{position:absolute;bottom:130%;left:50%;transform:translate(-50%,4px);width:230px;background:var(--ink);color:#fff;font-family:"DM Sans";font-weight:400;font-size:11.5px;line-height:1.5;padding:9px 11px;border-radius:9px;opacity:0;transition:.16s;pointer-events:none;z-index:30;text-align:left}
   .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink)}
 
@@ -240,10 +241,10 @@
   /* ---------- live agent (view 4) ---------- */
   .agent-note{font-family:"JetBrains Mono";font-size:11px;color:var(--brand);background:var(--indigo-soft);padding:2px 8px;border-radius:6px;white-space:nowrap}
   .agent-grid{display:grid;grid-template-columns:minmax(0,430px) 1fr;gap:18px;margin-top:24px;align-items:start}
-  @media(max-width:900px){.agent-grid{grid-template-columns:1fr}}
-  .agent-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+  @media(max-width:900px){.agent-grid{grid-template-columns:1fr}.agent-grid .agent-form{position:static}}
+  .agent-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px;position:sticky;top:76px}
   .agent-form label{font-family:"JetBrains Mono";font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-2);display:block;margin-bottom:5px}
-  .agent-form textarea,.agent-form input[type=number],.agent-form select{font-family:"DM Sans";font-size:13.5px;color:var(--ink);padding:9px 11px;border:1px solid var(--border-strong);border-radius:9px;background:var(--canvas);width:100%}
+  .agent-form textarea,.agent-form input[type=number],.agent-form select{font-family:"DM Sans";font-size:13.5px;color:var(--ink);padding:9px 11px;border:1px solid var(--border-strong);border-radius:9px;background:var(--canvas);width:100%;min-width:0}
   .agent-form textarea{resize:vertical;line-height:1.5}
   .agent-form textarea:focus,.agent-form input:focus,.agent-form select:focus{outline:2px solid var(--indigo-soft);border-color:var(--indigo)}
   .frow{display:flex;gap:10px}
@@ -261,6 +262,13 @@
   .ar-prov .dotlive{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg);flex:none}
   .ar-prov .dotcode{width:8px;height:8px;border-radius:50%;background:var(--indigo);box-shadow:0 0 0 3px var(--indigo-soft);flex:none}
   .ar-err{color:var(--no);font-size:13.5px;background:var(--no-bg);border:1px solid var(--no-bd);border-radius:10px;padding:14px;line-height:1.5}
+
+  /* ---------- mobile header ---------- */
+  @media(max-width:640px){
+    .top-inner{flex-direction:column;align-items:flex-start;gap:8px;padding:16px 0}
+    .brandmark .sub{display:none}
+    .disclosure{display:none}
+  }
 </style>
 </head>
 <body>
@@ -272,17 +280,17 @@
       <span class="bdivider"></span>
       <div>
         <h1>Warranty Claims Triage Console</h1>
-        <div class="sub">Auto-decides the clear cases with the clause cited. Escalates the ambiguous ones with a handover note for a human reviewer.</div>
+        <div class="sub">Auto-decides clear claims with the clause cited; escalates the ambiguous ones with a handover note.</div>
       </div>
     </div>
     <div class="disclosure">
-      <b>Synthetic claims data.</b> Rubric reflects Cars24's published Lifetime&nbsp;Warranty&nbsp;Plan terms: coverage, exclusions, void conditions. Not wired to any live claims system.
+      <b>Synthetic data.</b> Cars24's published Lifetime&nbsp;Warranty&nbsp;Plan terms. Not a live claims system.
     </div>
   </div>
 </header>
 
 <nav class="pill">
-  <button data-view="readme" class="active"><span class="ix">01</span> How it works</button>
+  <button data-view="readme" class="active" aria-current="page"><span class="ix">01</span> How it works</button>
   <button data-view="insights"><span class="ix">02</span> Insights</button>
   <button data-view="queue"><span class="ix">03</span> Claims queue</button>
   <button data-view="agent"><span class="ix">04</span> Live agent</button>
@@ -293,8 +301,8 @@
   <div class="wrap">
     <div class="eyebrow">How it works</div>
     <h2 class="vh">A judgment layer over the raw signal.</h2>
-    <p class="lede">Every claim arrives as plain-language signal: what a customer or technician actually typed. The console runs each one through Cars24's <strong>Lifetime Warranty Plan</strong> rubric in a fixed order, decides the unambiguous ones outright with the exact clause cited, and routes the genuinely ambiguous ones to a human with a written handover. It never forces a decision it can't defend.</p>
-    <div class="scope-note">This console scopes to the <strong>Lifetime Warranty Plan</strong> only. Cars24's 30-day and 12-month warranty tiers are out of scope for this build by design. The rubric, states, and decisions here apply to the Lifetime Warranty Plan terms exclusively.</div>
+    <p class="lede">Each claim arrives as plain-language signal. The console runs it through the <strong>Lifetime Warranty Plan</strong> rubric in fixed order, auto-decides the clear cases with the clause cited, and escalates the rest with a handover note.</p>
+    <div class="scope-note"><strong>Scope:</strong> the Lifetime Warranty Plan only. Cars24's 30-day and 12-month tiers are out of scope by design.</div>
 
     <div class="readme-grid">
 
@@ -333,10 +341,6 @@
         </div>
       </div>
 
-      <div class="card why">
-        <p><b>Why a triage layer at all.</b> Cars24's Lifetime Warranty is a trust instrument, the longest cover in the used-car market. At volume, that promise lives or dies on claim handling: a wrong or slow denial on a covered fault erodes the brand more than the claim ever cost. The job here is consistency and speed on the clear cases, so human judgment is spent only where it's actually needed.</p>
-      </div>
-
     </div>
   </div>
 </section>
@@ -346,34 +350,29 @@
   <div class="wrap">
     <div class="eyebrow">Insights · this batch</div>
     <h2 class="vh">What the rubric surfaces across <span id="totalN">40</span> claims.</h2>
-    <p class="lede">A read on this synthetic batch. Not a claim about Cars24's real claim mix, which isn't public. The point is the shape the layer produces: most claims decided cleanly, a sharp minority escalated, and a denial split that points somewhere useful. Action an escalation in the queue and every figure here recomputes live.</p>
+    <p class="lede">A read on this synthetic batch, not Cars24's real claim mix. The void-vs-exclusion ratio here is set to illustrate the diagnostic, not measured from real data. Most claims decide cleanly; a few escalate. Action an escalation in the queue and these figures recompute live.</p>
 
     <div class="metrics">
       <div class="metric">
         <div class="label">Decided with zero human review
-          <span class="info">i<span class="tip">On this batch. At real volume, this is the share of claims that never reach a reviewer: the turnaround and cost lever behind faster approvals.</span></span>
+          <span class="info" tabindex="0" aria-label="Metric explanation">i<span class="tip">On this batch. At real volume, this is the share of claims that skip a reviewer entirely: the direct driver of turnaround and review cost.</span></span>
         </div>
         <div class="big"><span id="mZeroPct">82</span><small>%</small></div>
         <div class="note"><span id="mZeroN">33</span> of <span class="mTot">40</span> auto-decided</div>
       </div>
       <div class="metric">
-        <div class="label">Auto-approved</div>
-        <div class="big" style="color:var(--ok)"><span id="mApp">17</span></div>
-        <div class="note">clean covered faults, clause cited</div>
-      </div>
-      <div class="metric">
         <div class="label">Escalated to a human
-          <span class="info">i<span class="tip">The cases the rubric refuses to force. Each carries a handover note naming what's ambiguous and what would resolve it.</span></span>
+          <span class="info" tabindex="0" aria-label="Metric explanation">i<span class="tip">The cases the rubric refuses to force. Each carries a handover note naming what's ambiguous and what would resolve it.</span></span>
         </div>
-        <div class="big" style="color:var(--esc)"><span id="mEsc">7</span></div>
-        <div class="note"><span id="mEscPct">17.5</span>% of the batch</div>
+        <div class="big" style="color:var(--esc)"><span id="mEscPct">18</span><small>%</small></div>
+        <div class="note"><span id="mEsc">7</span> of <span class="mTot">40</span> escalated</div>
       </div>
       <div class="metric">
         <div class="label">Denials that are void-driven
-          <span class="info">i<span class="tip">A void-heavy denial mix points upstream, to customer education and eligibility at sale, not to a claims-handling gap. Different problem, different owner.</span></span>
+          <span class="info" tabindex="0" aria-label="Metric explanation">i<span class="tip">A void-heavy denial mix points upstream, to customer education and eligibility at sale, not to a claims-handling gap. Different problem, different owner.</span></span>
         </div>
         <div class="big" style="color:var(--no)"><span id="mVoidPct">37</span><small>%</small></div>
-        <div class="note"><span id="mVoidN">6</span> of <span id="mDenN">16</span> denials</div>
+        <div class="note"><span id="mVoidN">6</span> of <span id="mDenN">16</span> auto-denials</div>
       </div>
     </div>
 
@@ -394,14 +393,6 @@
         <div id="denyBars"></div>
       </div>
     </div>
-
-    <div class="charts" style="margin-top:14px">
-      <div class="chart" style="grid-column:1/-1">
-        <h3>Claims by component</h3>
-        <div class="csub">Where the volume sits across the rubric's categories</div>
-        <div id="compBars"></div>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -409,8 +400,8 @@
 <section id="queue" class="view">
   <div class="wrap">
     <div class="eyebrow">Claims queue</div>
-    <h2 class="vh">Every claim, every decision, the clause behind it.</h2>
-    <p class="lede">Click any row for the full symptom, the decision trace, and the clause cited. Escalated rows carry a handover note and let you action the call as a human reviewer: the badge, the split, and the insights all update live.</p>
+    <h2 class="vh">Every decision, with the clause behind it.</h2>
+    <p class="lede">Click any row for the full trace and the clause cited. Escalated rows carry a handover note; approve or deny them and the badge, split, and insights update live.</p>
 
     <div class="filters">
       <div class="fgroup">
@@ -463,7 +454,7 @@
   <div class="wrap">
     <div class="eyebrow">Live agent</div>
     <h2 class="vh">Run a claim through the agent, live.</h2>
-    <p class="lede">Type a claim the way a customer or technician would, or load one of the 40 seed claims and edit it. The void checks run deterministically in your browser, they can't be wrong. If the warranty holds, the symptom goes to the model, which judges coverage, exclusion, or genuine ambiguity and returns the same structured decision you see in the queue. <span class="agent-note">Live call · Groq · llama-3.3-70b</span></p>
+    <p class="lede">Type a claim like a customer or technician would, or load a seed claim and edit it. Void checks run in your browser; if the warranty holds, the symptom goes to the model, which returns the same structured decision you see in the queue. <span class="agent-note">Live call · Groq · llama-3.3-70b</span></p>
 
     <div class="agent-grid">
       <form class="agent-form" id="agentForm" autocomplete="off">
@@ -473,7 +464,7 @@
         </div>
         <div>
           <label for="aSymptom">Reported symptom</label>
-          <textarea id="aSymptom" rows="3" placeholder="e.g. Gearbox whining at low speed, getting louder over the last week"></textarea>
+          <textarea id="aSymptom" rows="3" maxlength="600" placeholder="e.g. Gearbox whining at low speed, getting louder over the last week"></textarea>
         </div>
         <div class="frow">
           <div class="fgroup"><label for="aAge">Age (years)</label><input type="number" id="aAge" min="0" max="25" value="4" /></div>
@@ -486,7 +477,7 @@
           <div class="fgroup"><label for="aRen">Renewal</label><select id="aRen"><option>Current</option><option>Lapsed</option></select></div>
         </div>
         <button type="submit" class="btn-run" id="aRun">Adjudicate claim →</button>
-        <div class="agent-disc">Void checks run in your browser. Non-void claims are sent to the model for judgment. Nothing is stored.</div>
+        <div class="agent-disc">Void checks run in your browser. Non-void claims go to the model. Nothing is stored.</div>
       </form>
 
       <div class="agent-result" id="agentResult">
@@ -503,7 +494,7 @@
 
 <footer>
   <div class="wrap" style="padding:0">
-    Synthetic dataset · 40 claims · Cars24 Lifetime Warranty Plan rubric (publicly published coverage, exclusion & void terms). Built as a self-initiated demo. No real claims, customers, or systems are represented.
+    Synthetic data · 40 claims · Cars24 Lifetime Warranty Plan rubric · self-initiated demo, no real claims or systems.
   </div>
 </footer>
 
@@ -570,8 +561,8 @@ let filters = {status:"", cat:"", sub:""};
 /* ---------------- NAV ---------------- */
 const navBtns = document.querySelectorAll('nav.pill button');
 navBtns.forEach(b=>b.addEventListener('click',()=>{
-  navBtns.forEach(x=>x.classList.remove('active'));
-  b.classList.add('active');
+  navBtns.forEach(x=>{x.classList.remove('active');x.removeAttribute('aria-current');});
+  b.classList.add('active'); b.setAttribute('aria-current','page');
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(b.dataset.view==='readme'?'readme':b.dataset.view).classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
@@ -605,12 +596,12 @@ function renderTable(){
   document.getElementById('fCount').textContent = rows.length+' of '+CLAIMS.length;
   if(!rows.length){ tb.innerHTML='<tr><td colspan="5" class="empty">No claims match these filters.</td></tr>'; return; }
   tb.innerHTML = rows.map(c=>`
-    <tr onclick="openModal('${c.id}')">
+    <tr tabindex="0" role="button" aria-label="Open claim ${c.id}" onclick="openModal('${c.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal('${c.id}')}">
       <td class="cid">${c.id}</td>
-      <td class="comp"><span class="cat">${c.cat}</span><br><span class="scat">${c.sub}</span></td>
-      <td class="sym"><span class="clip">${c.symptom}</span></td>
+      <td class="comp"><span class="cat">${escapeHtml(c.cat)}</span><br><span class="scat">${escapeHtml(c.sub)}</span></td>
+      <td class="sym"><span class="clip">${escapeHtml(c.symptom)}</span></td>
       <td>${badgeFor(c.decision)}</td>
-      <td><span class="conf ${c.conf==='Low'?'low':''}">${c.conf}</span></td>
+      <td><span class="conf ${c.conf==='Low'?'low':''}">${escapeHtml(c.conf)}</span></td>
     </tr>`).join('');
 }
 
@@ -633,14 +624,20 @@ function buildTrace(c){
     return s;
   }
   s.push({k:'Coverage',r:'pass',n:(c.covered||'Covered system')+' is within the three covered systems.'});
+  if(c.decision.startsWith('Manually')){ // an escalation a human then actioned
+    s.push({k:'Exclusion',r:'flag',n:'Originally escalated as ambiguous; a human reviewer then made the call.'});
+    const den=isDenied(c.decision);
+    s.push({k:'Decision',r:den?'deny':'app',n:'Human reviewer '+(den?'denied':'approved')+' this claim.'});
+    return s;
+  }
   if(isDenied(c.decision)){ // exclusion within a covered system
     s.push({k:'Exclusion',r:'fail',n:c.clause});
-    s.push({k:'Decision',r:'deny',n:c.reason});
+    s.push({k:'Decision',r:'deny',n:'Denied on the cited exclusion above.'});
     return s;
   }
   if(isEsc(c.decision)){
-    s.push({k:'Exclusion',r:'flag',n:c.reason});
-    s.push({k:'Decision',r:'esc',n:'Cause can\'t be cleanly assigned to covered-defect vs excluded-cause, so it\'s routed to a human.'});
+    s.push({k:'Exclusion',r:'flag',n:'Maps to a covered system, but the cause can\'t be cleanly separated from an excluded one.'});
+    s.push({k:'Decision',r:'esc',n:'Routed to a human, see the handover note below.'});
     return s;
   }
   s.push({k:'Exclusion',r:'pass',n:'Failure stems from the covered component itself, not an excluded cause.'});
@@ -653,7 +650,7 @@ function traceHTML(c){
     const m=map[st.r];
     return `<div class="trace-step">
       <div class="trace-rail"><div class="trace-node ${m[0]}">${m[2]}</div><div class="trace-line"></div></div>
-      <div class="trace-body"><div class="ts-name">${st.k} <span class="ts-res ${m[1]}">${m[3]}</span></div><div class="ts-note">${st.n}</div></div>
+      <div class="trace-body"><div class="ts-name">${escapeHtml(st.k)} <span class="ts-res ${m[1]}">${m[3]}</span></div><div class="ts-note">${escapeHtml(st.n)}</div></div>
     </div>`;
   }).join('')+'</div>';
 }
@@ -667,12 +664,12 @@ function openModal(id){
     <div class="modal-head">
       <div class="mtop">
         <span class="cid">${c.id}</span>
-        <button class="modal-close" onclick="closeModal()">×</button>
+        <button class="modal-close" onclick="closeModal()" aria-label="Close">×</button>
       </div>
-      <h3>${c.cat} · ${c.sub}</h3>
+      <h3>${escapeHtml(c.cat)} · ${escapeHtml(c.sub)}</h3>
       <div class="modal-meta">
-        <span class="chip">${badgeForChip(c.decision)}</span>
-        <span class="chip">Confidence: ${c.conf}</span>
+        ${badgeFor(c.decision)}
+        <span class="chip">Confidence: ${escapeHtml(c.conf)}</span>
         <span class="chip">Age ${c.age}y</span>
         <span class="chip">${c.odo.toLocaleString('en-IN')} km</span>
         <span class="chip">Service ${c.svc}mo ago</span>
@@ -682,26 +679,24 @@ function openModal(id){
     </div>
     <div class="modal-body">
       <div class="mlabel">Reported symptom</div>
-      <div class="symtext">"${c.symptom}"</div>
+      <div class="symtext">"${escapeHtml(c.symptom)}"</div>
 
-      <div class="mlabel">Decision trace — rubric order</div>
+      <div class="mlabel">Decision trace · rubric order</div>
       ${traceHTML(c)}
 
       <div class="mlabel">Reasoning · clause cited</div>
-      <div class="reason">${c.reason}</div>
-      <div class="clause-cite">▸ ${c.clause}</div>
+      <div class="reason">${escapeHtml(c.reason)}</div>
+      <div class="clause-cite">▸ ${escapeHtml(c.clause)}</div>
 
       ${esc ? `<div class="mlabel">Handover note — for the human picking this up</div>
-        <div class="handover-box"><div class="ho-h">⚑ Escalation handover</div>${c.handover}</div>` : ''}
+        <div class="handover-box"><div class="ho-h">⚑ Escalation handover</div>${escapeHtml(c.handover)}</div>` : ''}
 
       <div id="actionZone">${esc ? actionButtons() : resolvedNote(c)}</div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
   m.dataset.cid = id;
   document.body.style.overflow='hidden';
-}
-function badgeForChip(d){ // plain text status for the chip
-  return d;
+  m.querySelector('.modal-close').focus();
 }
 function actionButtons(){
   return `<div class="actions">
@@ -740,18 +735,18 @@ function renderInsights(){
   const no  = CLAIMS.filter(c=>isDenied(c.decision)).length;
   const esc = CLAIMS.filter(c=>isEsc(c.decision)).length;
   const zero = app+no;
+  const autoDen = CLAIMS.filter(c=>isDenied(c.decision) && c.denyType).length;
   const voidDen = CLAIMS.filter(c=>isDenied(c.decision) && c.denyType==='void').length;
 
   document.getElementById('totalN').textContent = tot;
   document.querySelectorAll('.mTot').forEach(e=>e.textContent=tot);
   document.getElementById('mZeroPct').textContent = Math.round(zero/tot*100);
   document.getElementById('mZeroN').textContent = zero;
-  document.getElementById('mApp').textContent = app;
   document.getElementById('mEsc').textContent = esc;
-  document.getElementById('mEscPct').textContent = (esc/tot*100).toFixed(1);
-  document.getElementById('mVoidPct').textContent = no? Math.round(voidDen/no*100):0;
+  document.getElementById('mEscPct').textContent = Math.round(esc/tot*100);
+  document.getElementById('mVoidPct').textContent = autoDen? Math.round(voidDen/autoDen*100):0;
   document.getElementById('mVoidN').textContent = voidDen;
-  document.getElementById('mDenN').textContent = no;
+  document.getElementById('mDenN').textContent = autoDen;
 
   // split bar
   const sb = document.getElementById('splitBar');
@@ -772,14 +767,8 @@ function renderInsights(){
     ['Void condition',voidN,'var(--no)'],
     ['Outside coverage',covN,'#c85a70'],
     ['Exclusion (covered system)',exN,'#dd8a99']
-  ].map(([l,v,col])=>barRow(l,v,no,col,denMax)).join('');
+  ].map(([l,v,col])=>barRow(l,v,autoDen,col,denMax)).join('');
 
-  // component bars
-  const cats=['Engine','Transmission','Drivetrain','Outside coverage','Void condition'];
-  const counts = cats.map(cat=>CLAIMS.filter(c=>c.cat===cat).length);
-  const cmax = Math.max(...counts,1);
-  document.getElementById('compBars').innerHTML = cats.map((cat,i)=>
-    barRow(cat,counts[i],tot,'var(--indigo)',cmax)).join('');
 }
 function barRow(label,val,denom,color,max){
   const pct = max? (val/max*100):0;
